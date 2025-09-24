@@ -70,7 +70,7 @@ class HomeView extends GetView<HomeController> {
                       // Timer
                       Obx(
                         () => Text(
-                          '${controller.recordingDuration.value.inMinutes.toString().padLeft(2, '0')} : ${(controller.recordingDuration.value.inSeconds % 60).toString().padLeft(2, '0')}',
+                          '${controller.globalDuration.value.inMinutes.toString().padLeft(2, '0')} : ${(controller.globalDuration.value.inSeconds % 60).toString().padLeft(2, '0')}',
                           style: const TextStyle(
                             fontSize: 48,
                             fontWeight: FontWeight.w800,
@@ -110,24 +110,59 @@ class HomeView extends GetView<HomeController> {
                   const SizedBox(width: 28),
                   // Large center mic
                   Obx(
-                    () => Material(
-                      shape: const CircleBorder(),
-                      elevation: 6,
-                      color: controller.isRecording.value
-                          ? Colors.red
-                          : Colors
-                                .grey[800], // slightly darker neutral for focal button
-                      child: InkWell(
-                        customBorder: const CircleBorder(),
-                        onTap: () {
-                          controller.toggleRecording();
-                        },
-                        child:  Padding(
-                          padding: EdgeInsets.all(20),
-                          child: Icon(controller.isRecording.value ? Icons.stop : Icons.mic, size: 32, color: Colors.white),
-                        ),
-                      ),
-                    ),
+                    () => controller.isCompletedRecording.value
+                        ? Material(
+                            shape: const CircleBorder(),
+                            elevation: 6,
+                            color: controller.isPlaying.value
+                                ? Colors.green : Colors.grey[800],
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: () {
+                                if (controller.isPlaying.value) {
+                                  controller.pausePlaying();
+                                } else if (controller.isPaused.value) {
+                                  controller.resumePlaying();
+                                } else {
+                                  controller.startPlaying();
+                                }
+                              },
+                              child: Padding(
+                                padding: EdgeInsets.all(20),
+                                child: Icon(
+                                  controller.isPlaying.value
+                                      ? Icons.pause
+                                      : Icons.play_arrow,
+                                  size: 32,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          )
+                        : Material(
+                            shape: const CircleBorder(),
+                            elevation: 6,
+                            color: controller.isRecording.value
+                                ? Colors.red
+                                : Colors
+                                      .grey[800], // slightly darker neutral for focal button
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: () {
+                                controller.toggleRecording();
+                              },
+                              child: Padding(
+                                padding: EdgeInsets.all(20),
+                                child: Icon(
+                                  controller.isRecording.value
+                                      ? Icons.stop
+                                      : Icons.mic,
+                                  size: 32,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
                   ),
                   const SizedBox(width: 28),
                   // Right small control
