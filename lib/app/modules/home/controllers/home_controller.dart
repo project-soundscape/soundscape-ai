@@ -7,7 +7,7 @@ class HomeController extends GetxController {
   RxBool isPlaying = false.obs;
   RxBool isPaused = false.obs;
   RxBool isRecording = false.obs;
-  Duration totalDuration =  Duration.zero;
+  Duration totalDuration = Duration.zero;
   Rx<Duration> globalDuration = Duration.zero.obs;
   String recordedFilePath = '';
   RxBool isCompletedRecording = false.obs;
@@ -34,6 +34,10 @@ class HomeController extends GetxController {
   Future<void> toggleRecording() async {
     // Logic to start or stop recording
     if (isRecording.value) {
+      if (globalDuration.value.inSeconds < 3) {
+        // Minimum recording duration not met
+        return;
+      }
       _stopRecording();
     } else {
       bool granted = await requestPermission(Permission.microphone);
@@ -51,7 +55,7 @@ class HomeController extends GetxController {
     isRecording.value = true;
     globalDuration.value = Duration.zero;
 
-    // Start the recording processR
+    // Start the recording process
     Future.microtask(() async {
       final recorder = FlutterSoundRecorder();
       try {
@@ -64,13 +68,29 @@ class HomeController extends GetxController {
           toFile: recordedFilePath,
         );
 
-        while (isRecording.value) {
+        const int minSeconds = 3; // Minimum recording duration
+        const int maxSeconds = 15; // Auto-stop after 15 seconds
+        bool stopRequested = false;
+
+        while (true) {
           await Future.delayed(const Duration(seconds: 1));
-          if (!isRecording.value) break;
-          globalDuration.value = DateTime.now().difference(start);
-          if (DateTime.now().difference(start).inSeconds >= 15) {
-            // Auto-stop after 15 seconds
+
+          final elapsed = DateTime.now().difference(start);
+          globalDuration.value = elapsed;
+
+          // Capture manual stop request
+          if (!stopRequested && !isRecording.value) {
+            stopRequested = true;
+          }
+
+          // Auto-stop at max duration
+          if (elapsed.inSeconds >= maxSeconds) {
             _stopRecording();
+            break;
+          }
+
+          // Honor stop only after minimum duration
+          if (stopRequested && elapsed.inSeconds >= minSeconds) {
             break;
           }
         }
@@ -134,6 +154,7 @@ class HomeController extends GetxController {
     isPlaying.value = false;
     isPaused.value = false;
     isRecording.value = false;
+    player.closePlayer();
     globalDuration.value = Duration.zero;
     recordedFilePath = '';
     isCompletedRecording.value = false;

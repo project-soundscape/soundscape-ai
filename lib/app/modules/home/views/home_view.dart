@@ -30,7 +30,7 @@ class HomeView extends GetView<HomeController> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Card(
-                elevation: 2,
+                elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
@@ -168,7 +168,9 @@ class HomeView extends GetView<HomeController> {
                                 backgroundColor: Colors.grey[100],
                                 child: IconButton(
                                   onPressed: () {
-                                    controller.isCompletedRecording.value ? controller.reset() : null;
+                                    controller.isCompletedRecording.value
+                                        ? controller.reset()
+                                        : null;
                                   },
                                   icon: Icon(
                                     controller.isCompletedRecording.value
