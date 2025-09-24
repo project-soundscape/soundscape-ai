@@ -79,105 +79,112 @@ class HomeView extends GetView<HomeController> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Capture ~15s of your surroundings',
-                        style: TextStyle(color: Colors.black45, fontSize: 16),
-                        textAlign: TextAlign.center,
+                      const SizedBox(height: 20),
+                      // Control buttons row
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Left small control
+                            CircleAvatar(
+                              radius: 26,
+                              backgroundColor: Colors.grey[100],
+                              child: IconButton(
+                                onPressed: () {},
+                                icon: const Icon(
+                                  Icons.tune,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 28),
+                            // Large center mic
+                            Obx(
+                              () => controller.isCompletedRecording.value
+                                  ? Material(
+                                      shape: const CircleBorder(),
+                                      elevation: 6,
+                                      color: controller.isPlaying.value
+                                          ? Colors.green
+                                          : Colors.grey[800],
+                                      child: InkWell(
+                                        customBorder: const CircleBorder(),
+                                        onTap: () {
+                                          if (controller.isPlaying.value) {
+                                            controller.pausePlaying();
+                                          } else if (controller
+                                              .isPaused
+                                              .value) {
+                                            controller.resumePlaying();
+                                          } else {
+                                            controller.startPlaying();
+                                          }
+                                        },
+                                        child: Padding(
+                                          padding: EdgeInsets.all(20),
+                                          child: Icon(
+                                            controller.isPlaying.value
+                                                ? Icons.pause
+                                                : Icons.play_arrow,
+                                            size: 32,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : Material(
+                                      shape: const CircleBorder(),
+                                      elevation: 6,
+                                      color: controller.isRecording.value
+                                          ? Colors.red
+                                          : Colors
+                                                .grey[800], // slightly darker neutral for focal button
+                                      child: InkWell(
+                                        customBorder: const CircleBorder(),
+                                        onTap: () {
+                                          controller.toggleRecording();
+                                        },
+                                        child: Padding(
+                                          padding: EdgeInsets.all(20),
+                                          child: Icon(
+                                            controller.isRecording.value
+                                                ? Icons.stop
+                                                : Icons.mic,
+                                            size: 32,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                            ),
+                            const SizedBox(width: 28),
+                            Obx(
+                              () => CircleAvatar(
+                                radius: 26,
+                                backgroundColor: Colors.grey[100],
+                                child: IconButton(
+                                  onPressed: () {
+                                    controller.isCompletedRecording.value ? controller.reset() : null;
+                                  },
+                                  icon: Icon(
+                                    controller.isCompletedRecording.value
+                                        ? Icons.refresh
+                                        : Icons.location_on,
+                                    color: Colors.black54,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ),
-            // Spacer to push controls down
-            const Spacer(),
-            // Control buttons row
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 30),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Left small control
-                  CircleAvatar(
-                    radius: 26,
-                    backgroundColor: Colors.grey[100],
-                    child: IconButton(
-                      onPressed: () {},
-                      icon: const Icon(Icons.tune, color: Colors.black54),
-                    ),
-                  ),
-                  const SizedBox(width: 28),
-                  // Large center mic
-                  Obx(
-                    () => controller.isCompletedRecording.value
-                        ? Material(
-                            shape: const CircleBorder(),
-                            elevation: 6,
-                            color: controller.isPlaying.value
-                                ? Colors.green : Colors.grey[800],
-                            child: InkWell(
-                              customBorder: const CircleBorder(),
-                              onTap: () {
-                                if (controller.isPlaying.value) {
-                                  controller.pausePlaying();
-                                } else if (controller.isPaused.value) {
-                                  controller.resumePlaying();
-                                } else {
-                                  controller.startPlaying();
-                                }
-                              },
-                              child: Padding(
-                                padding: EdgeInsets.all(20),
-                                child: Icon(
-                                  controller.isPlaying.value
-                                      ? Icons.pause
-                                      : Icons.play_arrow,
-                                  size: 32,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          )
-                        : Material(
-                            shape: const CircleBorder(),
-                            elevation: 6,
-                            color: controller.isRecording.value
-                                ? Colors.red
-                                : Colors
-                                      .grey[800], // slightly darker neutral for focal button
-                            child: InkWell(
-                              customBorder: const CircleBorder(),
-                              onTap: () {
-                                controller.toggleRecording();
-                              },
-                              child: Padding(
-                                padding: EdgeInsets.all(20),
-                                child: Icon(
-                                  controller.isRecording.value
-                                      ? Icons.stop
-                                      : Icons.mic,
-                                  size: 32,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                  ),
-                  const SizedBox(width: 28),
-                  // Right small control
-                  CircleAvatar(
-                    radius: 26,
-                    backgroundColor: Colors.grey[100],
-                    child: IconButton(
-                      onPressed: () {},
-                      icon: const Icon(
-                        Icons.location_on,
-                        color: Colors.black54,
-                      ),
-                    ),
-                  ),
-                ],
               ),
             ),
           ],

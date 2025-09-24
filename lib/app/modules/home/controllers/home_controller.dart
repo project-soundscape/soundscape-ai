@@ -129,6 +129,16 @@ class HomeController extends GetxController {
     await player.closePlayer();
     isPlaying.value = false;
   }
+
+  void reset() {
+    isPlaying.value = false;
+    isPaused.value = false;
+    isRecording.value = false;
+    globalDuration.value = Duration.zero;
+    recordedFilePath = '';
+    isCompletedRecording.value = false;
+    totalDuration = Duration.zero;
+  }
 }
 
 Future<bool> requestPermission(Permission permission) async {
