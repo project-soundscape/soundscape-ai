@@ -1,47 +1,63 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:uuid/uuid.dart';
+import 'package:path_provider/path_provider.dart';
+import '../../../data/models/recording_model.dart';
+import '../../../data/services/location_service.dart';
+import '../../../data/services/storage_service.dart';
+import '../../../data/services/appwrite_service.dart';
 
 class HomeController extends GetxController {
+  final LocationService _locationService = Get.find<LocationService>();
+  final StorageService _storageService = Get.find<StorageService>();
+  final AppwriteService _appwriteService = Get.find<AppwriteService>();
+
   RxBool isPlaying = false.obs;
   RxBool isPaused = false.obs;
   RxBool isRecording = false.obs;
+  RxBool isLoading = false.obs;
+  
   Duration totalDuration = Duration.zero;
   Rx<Duration> globalDuration = Duration.zero.obs;
   String recordedFilePath = '';
   RxBool isCompletedRecording = false.obs;
   final player = FlutterSoundPlayer();
 
-  final count = 0.obs;
+  Position? _recordingLocation;
+
   @override
   void onInit() {
     super.onInit();
   }
 
   @override
-  void onReady() {
-    super.onReady();
-  }
-
-  @override
   void onClose() {
+    player.closePlayer();
     super.onClose();
   }
 
-  void increment() => count.value++;
-
   Future<void> toggleRecording() async {
-    // Logic to start or stop recording
     if (isRecording.value) {
       if (globalDuration.value.inSeconds < 3) {
-        // Minimum recording duration not met
+        Get.snackbar('Too Short', 'Recording must be at least 3 seconds');
         return;
       }
       _stopRecording();
     } else {
       bool granted = await requestPermission(Permission.microphone);
       if (!granted) return;
+      
+      // Request location permission upfront
+      bool locGranted = await requestPermission(Permission.location);
+      if(locGranted) {
+         // Start fetching location in background or just wait? 
+         // For UX, let's start recording immediately and fetch location.
+      }
+      
       _startRecording();
     }
   }
@@ -54,44 +70,50 @@ class HomeController extends GetxController {
   void _startRecording() {
     isRecording.value = true;
     globalDuration.value = Duration.zero;
+    _recordingLocation = null;
 
-    // Start the recording process
+    // Fetch location while recording
+    _locationService.getCurrentLocation().then((pos) {
+      _recordingLocation = pos;
+    }).catchError((e) {
+      print("Location error: $e");
+    });
+
     Future.microtask(() async {
       final recorder = FlutterSoundRecorder();
       try {
         await recorder.openRecorder();
 
-        final start = DateTime.now();
-        recordedFilePath = '${DateTime.now().millisecondsSinceEpoch}.aac';
+        final directory = await getApplicationDocumentsDirectory();
+        recordedFilePath = '${directory.path}/${DateTime.now().millisecondsSinceEpoch}.aac';
+        
         await recorder.startRecorder(
           codec: Codec.aacMP4,
           toFile: recordedFilePath,
         );
 
-        const int minSeconds = 3; // Minimum recording duration
-        const int maxSeconds = 15; // Auto-stop after 15 seconds
+        const int minSeconds = 3; 
+        const int maxSeconds = 15; 
         bool stopRequested = false;
+        final start = DateTime.now();
 
         while (true) {
-          await Future.delayed(const Duration(seconds: 1));
+          await Future.delayed(const Duration(milliseconds: 100)); // finer grain
+          
+          if (!isRecording.value && !stopRequested) {
+             stopRequested = true;
+          }
 
           final elapsed = DateTime.now().difference(start);
           globalDuration.value = elapsed;
 
-          // Capture manual stop request
-          if (!stopRequested && !isRecording.value) {
-            stopRequested = true;
-          }
-
-          // Auto-stop at max duration
           if (elapsed.inSeconds >= maxSeconds) {
             _stopRecording();
             break;
           }
-
-          // Honor stop only after minimum duration
+          
           if (stopRequested && elapsed.inSeconds >= minSeconds) {
-            break;
+             break;
           }
         }
       } finally {
@@ -105,16 +127,43 @@ class HomeController extends GetxController {
     });
   }
 
+  Future<void> saveRecording() async {
+    if (recordedFilePath.isEmpty) return;
+
+    final recording = Recording(
+      id: const Uuid().v4(),
+      path: recordedFilePath,
+      timestamp: DateTime.now(),
+      duration: globalDuration.value,
+      latitude: _recordingLocation?.latitude,
+      longitude: _recordingLocation?.longitude,
+      status: 'pending',
+    );
+
+    await _storageService.saveRecording(recording);
+    
+    // Auto-upload in background
+    _appwriteService.uploadRecording(recording);
+    
+    if (Get.context != null) {
+      ScaffoldMessenger.of(Get.context!).showSnackBar(
+        const SnackBar(content: Text('Recording saved to library!'), backgroundColor: Colors.teal),
+      );
+    }
+    reset();
+  }
+
+  void discardRecording() {
+    reset();
+  }
+
+  // ... Playback methods same as before ...
   Future<void> startPlaying() async {
-    // Logic to start playing the recorded audio
     await player.openPlayer();
     await player.startPlayer(fromURI: recordedFilePath, codec: Codec.aacMP4);
     isPlaying.value = true;
     player.setSubscriptionDuration(const Duration(milliseconds: 50));
     player.onProgress?.listen((e) {
-      // Update UI with playback progress if needed
-      debugPrint('Playback progress: ${e.position}');
-      // set globalDuration.value = e.position;
       globalDuration.value = e.position;
       totalDuration = e.duration;
       if (e.position >= e.duration) {
@@ -124,16 +173,13 @@ class HomeController extends GetxController {
   }
 
   Future<void> pausePlaying() async {
-    // Logic to pause playing the recorded audio
     await player.pausePlayer();
     isPaused.value = true;
     isPlaying.value = false;
   }
 
   Future<void> resumePlaying() async {
-    // Logic to resume playing the recorded audio
     if (totalDuration.inSeconds == globalDuration.value.inSeconds) {
-      // If playback reached the end, restart from beginning
       await stopPlaying();
       await startPlaying();
       return;
@@ -144,7 +190,6 @@ class HomeController extends GetxController {
   }
 
   Future<void> stopPlaying() async {
-    // Logic to stop playing the recorded audio
     await player.stopPlayer();
     await player.closePlayer();
     isPlaying.value = false;
@@ -159,21 +204,11 @@ class HomeController extends GetxController {
     recordedFilePath = '';
     isCompletedRecording.value = false;
     totalDuration = Duration.zero;
+    _recordingLocation = null;
   }
 }
 
 Future<bool> requestPermission(Permission permission) async {
   final status = await permission.request();
-
-  if (status.isGranted) {
-    // Permission is granted
-    return true;
-  } else if (status.isPermanentlyDenied) {
-    // Permission is permanently denied, open app settings
-    await openAppSettings();
-    return false;
-  } else {
-    // Permission is denied (but not permanently)
-    return false;
-  }
+  return status.isGranted;
 }

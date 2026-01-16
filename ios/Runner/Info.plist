@@ -45,5 +45,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>We need access to your microphone to record environmental sounds.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>We need your location to geotag your recordings.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>We need your location to geotag your recordings.</string>
 </dict>
 </plist>
