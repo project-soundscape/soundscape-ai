@@ -4,10 +4,12 @@ import '../../home/controllers/home_controller.dart';
 import '../../settings/controllers/settings_controller.dart';
 import '../../map/controllers/map_controller.dart';
 import '../../library/controllers/library_controller.dart';
+import '../../../data/services/audio_analysis_service.dart';
 
 class DashboardBinding extends Bindings {
   @override
   void dependencies() {
+    Get.lazyPut<AudioAnalysisService>(() => AudioAnalysisService());
     Get.lazyPut<DashboardController>(
       () => DashboardController(),
     );

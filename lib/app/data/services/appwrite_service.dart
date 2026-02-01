@@ -5,6 +5,7 @@ import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/models.dart' as models;
 import 'package:get/get.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import '../models/recording_model.dart';
 import 'storage_service.dart';
 
@@ -120,7 +121,8 @@ class AppwriteService extends GetxService {
       for (var doc in result.documents) {
         final data = doc.data;
         String fileId = data['s3key'];
-        String path = storage.getFileView(bucketId: bucketId, fileId: fileId).toString();
+        // Construct the view URL manually as getFileView returns bytes
+        String path = "$endpoint/storage/buckets/$bucketId/files/$fileId/view?project=$projectId";
 
         Recording rec = Recording(
           id: doc.$id,
@@ -214,12 +216,40 @@ class AppwriteService extends GetxService {
     }
 
     try {
-      final file = File(recording.path);
-      if (!await file.exists()) {
-        throw Exception("File not found at ${recording.path}");
+      // If path is remote, skip file check
+      bool isRemote = recording.path.startsWith('http');
+      
+      if (!isRemote) {
+        final file = File(recording.path);
+        if (!await file.exists()) {
+          throw Exception("File not found at ${recording.path}");
+        }
       }
 
-      // 1. Upload File
+      // Check if document already exists
+      try {
+        final existingDoc = await databases.getDocument(
+          databaseId: databaseId,
+          collectionId: recordingsCollectionId,
+          documentId: recording.id,
+        );
+        
+        // If we reach here, document exists
+        _resumeExistingRecording(recording, existingDoc);
+        return;
+      } on AppwriteException catch (e) {
+        if (e.code != 404) rethrow; // If error is not "Not Found", throw it
+      }
+
+      if (isRemote) {
+        // If it's remote but document doesn't exist (404 above), we can't re-upload the file from a URL easily 
+        // without downloading it first. For now, we assume if it's remote, the file SHOULD exist in storage 
+        // if we are here (fetched from list). 
+        // But if the doc is missing, we are in an inconsistent state.
+        throw Exception("Cannot re-upload remote file. Please try recording again.");
+      }
+
+      // 1. Upload File (Only if local)
       final upload = await storage.createFile(
         bucketId: bucketId,
         fileId: ID.unique(),
@@ -261,6 +291,61 @@ class AppwriteService extends GetxService {
 
     } catch (e) {
       _handleUploadError(recording, e.toString());
+    }
+  }
+
+  void _resumeExistingRecording(Recording recording, models.Document doc) async {
+    print("Document ${recording.id} already exists. Resuming...");
+    
+    // Update local status based on remote
+    final status = doc.data['status'];
+    // Map remote status to local status
+    if (status == 'COMPLETED') {
+      recording.status = 'processed';
+    } else if (status == 'FAILED') {
+      recording.status = 'failed';
+    } else {
+      recording.status = 'uploaded';
+    }
+    Get.find<StorageService>().updateRecording(recording);
+
+    if (status == 'COMPLETED') {
+       _fetchDetections(doc.$id, recording);
+       if(Get.context != null) {
+         ScaffoldMessenger.of(Get.context!).showSnackBar(
+            const SnackBar(content: Text("Analysis already completed. Fetching results..."), backgroundColor: Colors.teal)
+         );
+       }
+    } else {
+       // FAILED, QUEUED, or PROCESSING
+       // Force re-trigger if FAILED or stuck in QUEUED
+       if (status == 'FAILED' || status == 'QUEUED') {
+          print("Re-triggering analysis (State was $status)...");
+          try {
+            await databases.updateDocument(
+              databaseId: databaseId,
+              collectionId: recordingsCollectionId,
+              documentId: doc.$id,
+              data: {'status': 'QUEUED'}
+            );
+            if(Get.context != null) {
+              ScaffoldMessenger.of(Get.context!).showSnackBar(
+                  const SnackBar(content: Text("Restarting analysis..."), backgroundColor: Colors.teal)
+              );
+            }
+          } catch (e) {
+            print("Error re-triggering: $e");
+          }
+       } else {
+          // PROCESSING
+          if(Get.context != null) {
+             ScaffoldMessenger.of(Get.context!).showSnackBar(
+                const SnackBar(content: Text("Analysis in progress..."), backgroundColor: Colors.blue)
+             );
+          }
+       }
+       
+       _listenForAnalysis(doc.$id, recording);
     }
   }
 
@@ -415,4 +500,38 @@ class AppwriteService extends GetxService {
       print("Appwrite: Error updating metadata: $e");
     }
   }
+
+  Future<String> downloadRecordingFile(String url) async {
+    try {
+      // Extract fileId from URL: .../files/[FILE_ID]/view...
+      final uri = Uri.parse(url);
+      final segments = uri.pathSegments;
+      final filesIndex = segments.indexOf('files');
+      if (filesIndex == -1 || filesIndex + 1 >= segments.length) {
+        throw Exception("Invalid Appwrite URL structure");
+      }
+      final fileId = segments[filesIndex + 1];
+
+      // Download bytes
+      final bytes = await storage.getFileDownload(
+        bucketId: bucketId,
+        fileId: fileId,
+      );
+
+      // Save to temp file
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/$fileId.aac');
+      await tempFile.writeAsBytes(bytes);
+      
+      return tempFile.path;
+    } catch (e) {
+      print("Error downloading file: $e");
+      rethrow;
+    }
+  }
 }
+
+// Helper to avoid adding path_provider import if not already there, 
+// but AppwriteService doesn't import path_provider. 
+// It imports `dart:io`.
+// Need to add `import 'package:path_provider/path_provider.dart';` to imports.

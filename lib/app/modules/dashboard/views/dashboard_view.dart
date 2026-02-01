@@ -8,49 +8,31 @@ import '../../settings/views/settings_view.dart';
 
 class DashboardView extends GetView<DashboardController> {
   const DashboardView({super.key});
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Obx(() => IndexedStack(
         index: controller.tabIndex.value,
-        children: [
-          const HomeView(), // Record Tab
-          const MapView(),
-          const LibraryView(),
-          const SettingsView(),
+        children: const [
+          HomeView(),
+          MapView(), // Use the correct class name for Map
+          LibraryView(),
+          SettingsView(),
         ],
       )),
       bottomNavigationBar: Obx(() => BottomNavigationBar(
-        unselectedItemColor: Colors.grey,
-        selectedItemColor: const Color(0xFF004D40),
-        onTap: controller.changeTabIndex,
         currentIndex: controller.tabIndex.value,
-        showSelectedLabels: true,
+        onTap: controller.changeTabIndex,
+        selectedItemColor: Colors.teal,
+        unselectedItemColor: Colors.grey,
         showUnselectedLabels: true,
         type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
-        elevation: 8,
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.mic_none),
-            activeIcon: Icon(Icons.mic),
-            label: 'Record',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.map_outlined),
-            activeIcon: Icon(Icons.map),
-            label: 'Map',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.library_books_outlined),
-            activeIcon: Icon(Icons.library_books),
-            label: 'Library',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_outlined),
-            activeIcon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.mic), label: 'Record'),
+          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Map'),
+          BottomNavigationBarItem(icon: Icon(Icons.library_music), label: 'Library'),
+          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
         ],
       )),
     );

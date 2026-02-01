@@ -108,8 +108,8 @@
                 "log.write"
             ],
             "events": [
-                "databases.68da4b6900256869e751.collections.recordings.documents.*.create",
-                "databases.68da4b6900256869e751.collections.recordings.documents.*.update"
+                "databases.*.collections.recordings.documents.*.create",
+                "databases.*.collections.recordings.documents.*.update"
             ],
             "schedule": "",
             "timeout": 300,

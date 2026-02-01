@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:audio_waveforms/audio_waveforms.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../controllers/details_controller.dart';
 
 class DetailsView extends GetView<DetailsController> {
@@ -98,8 +99,95 @@ class DetailsView extends GetView<DetailsController> {
                   ),
                 ),
               ),
+              
               const SizedBox(height: 24),
               
+              // SPECIES INSIGHT CARD
+              Obx(() {
+                if (controller.isLoadingWiki.value) {
+                  return const Center(child: Padding(
+                    padding: EdgeInsets.all(20.0),
+                    child: CircularProgressIndicator(),
+                  ));
+                }
+                
+                final info = controller.speciesData.value;
+                if (info == null) return const SizedBox.shrink();
+
+                return Card(
+                  elevation: 2,
+                  margin: const EdgeInsets.only(bottom: 24),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (info['imageUrl'] != null)
+                        SizedBox(
+                          height: 200,
+                          width: double.infinity,
+                          child: CachedNetworkImage(
+                            imageUrl: info['imageUrl'],
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(color: Colors.grey[200]),
+                            errorWidget: (context, url, error) => const Icon(Icons.image_not_supported),
+                          ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              info['title'] ?? 'Unknown Bird',
+                              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              info['description'] ?? 'No description available.',
+                              style: TextStyle(color: Colors.grey[700], height: 1.4),
+                            ),
+                            const SizedBox(height: 20),
+                            const Text('Real World Options', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => controller.launchURL(info['pageUrl']),
+                                    icon: const Icon(Icons.menu_book_rounded, size: 18),
+                                    label: const Text('Wikipedia'),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: () => controller.openEBird(info['title']),
+                                    icon: const Icon(Icons.explore, size: 18),
+                                    label: const Text('eBird'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF4CAF50),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+
               // Metadata
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,

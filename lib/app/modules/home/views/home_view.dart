@@ -1,13 +1,16 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
-
 import 'package:get/get.dart';
-
 import '../controllers/home_controller.dart';
+import '../../../data/services/audio_analysis_service.dart';
 
 class HomeView extends GetView<HomeController> {
   const HomeView({super.key});
+  
   @override
   Widget build(BuildContext context) {
+    final analysisService = Get.find<AudioAnalysisService>();
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text('SoundScape'),
@@ -37,9 +40,10 @@ class HomeView extends GetView<HomeController> {
                     ),
                   ),
                 ),
+                
                 const SizedBox(height: 48),
                 
-                // Main Action Button
+                // Main Action Button (Record/Review)
                 Obx(() {
                   if (controller.isCompletedRecording.value) {
                     // Review State
@@ -135,6 +139,78 @@ class HomeView extends GetView<HomeController> {
                             style: TextButton.styleFrom(
                               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                             ),
+                          ),
+                          
+                          const SizedBox(height: 24),
+                          
+                          // Top 5 Confidence Meters
+                          SizedBox(
+                            height: 200,
+                            child: Obx(() {
+                                final predictions = analysisService.topPredictions;
+                                if (predictions.isEmpty) return const SizedBox.shrink();
+                                
+                                return ListView.separated(
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: predictions.length,
+                                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                                  itemBuilder: (context, index) {
+                                    final item = predictions[index];
+                                    final label = item.key;
+                                    final score = item.value;
+                                    
+                                    // Highlight Speech in Red if high, others Teal
+                                    final isSpeech = label == 'Speech';
+                                    final isWarning = isSpeech && score > 0.7;
+                                    final color = isWarning ? Colors.red : (isSpeech ? Colors.orange : Colors.teal);
+                                    
+                                    return Row(
+                                      children: [
+                                        SizedBox(
+                                          width: 120, 
+                                          child: Text(
+                                            label, 
+                                            style: TextStyle(
+                                              fontSize: 12, 
+                                              fontWeight: isWarning ? FontWeight.bold : FontWeight.normal,
+                                              color: isWarning ? Colors.red : Colors.black87
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                            textAlign: TextAlign.end,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: TweenAnimationBuilder<double>(
+                                            tween: Tween<double>(begin: 0, end: score),
+                                            duration: const Duration(milliseconds: 300),
+                                            curve: Curves.easeOutCubic,
+                                            builder: (context, value, child) {
+                                              return ClipRRect(
+                                                borderRadius: BorderRadius.circular(4),
+                                                child: LinearProgressIndicator(
+                                                  value: value,
+                                                  backgroundColor: Colors.grey[200],
+                                                  color: color,
+                                                  minHeight: 12,
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        SizedBox(
+                                          width: 40,
+                                          child: Text(
+                                            "${(score * 100).toInt()}%",
+                                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                          ),
+                                        )
+                                      ],
+                                    );
+                                  },
+                                );
+                            }),
                           ),
                         ]
                       ],

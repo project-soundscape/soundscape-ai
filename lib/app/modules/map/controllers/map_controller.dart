@@ -6,14 +6,17 @@ import 'package:latlong2/latlong.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_compass/flutter_compass.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../data/models/recording_model.dart';
 import '../../../data/services/storage_service.dart';
 import '../../../data/services/location_service.dart';
+import '../../../data/services/wiki_service.dart';
 import '../../../routes/app_pages.dart';
 
 class SoundMapController extends GetxController {
   final StorageService _storageService = Get.find<StorageService>();
   final LocationService _locationService = Get.find<LocationService>();
+  final WikiService _wikiService = Get.put(WikiService());
   
   final markers = <Marker>[].obs;
   final visibleRecordings = <Recording>[].obs;
@@ -155,18 +158,46 @@ class SoundMapController extends GetxController {
         markers.add(
           Marker(
             point: LatLng(rec.latitude!, rec.longitude!),
-            width: 40,
-            height: 40,
-            child: GestureDetector(
-              onTap: () {
-                Get.toNamed(Routes.DETAILS, arguments: rec);
-              },
-              child: const Icon(Icons.location_on, color: Colors.red, size: 40),
-            ),
+            width: 50,
+            height: 50,
+            child: _buildMarkerChild(rec),
           ),
         );
       }
     }
+  }
+  
+  Widget _buildMarkerChild(Recording rec) {
+    return GestureDetector(
+      onTap: () {
+        Get.toNamed(Routes.DETAILS, arguments: rec);
+      },
+      child: rec.commonName != null 
+          ? FutureBuilder<String?>(
+              future: _wikiService.getBirdImage(rec.commonName!),
+              builder: (context, snapshot) {
+                if (snapshot.hasData && snapshot.data != null) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                    ),
+                    child: CircleAvatar(
+                      backgroundImage: CachedNetworkImageProvider(snapshot.data!),
+                    ),
+                  );
+                }
+                // Fallback while loading or if no image
+                return _defaultMarker();
+              },
+            )
+          : _defaultMarker(),
+    );
+  }
+
+  Widget _defaultMarker() {
+    return const Icon(Icons.location_on, color: Colors.red, size: 50);
   }
 
   void _sortRecordingsByDistance() {
