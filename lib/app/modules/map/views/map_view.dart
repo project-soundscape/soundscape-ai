@@ -11,12 +11,6 @@ class MapView extends GetView<SoundMapController> {
 
   @override
   Widget build(BuildContext context) {
-    if(!Get.isRegistered<SoundMapController>()) {
-      Get.put(SoundMapController());
-    } else {
-      controller.loadMarkers();
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: SizedBox(
@@ -91,17 +85,33 @@ class MapView extends GetView<SoundMapController> {
                   if (controller.currentUserLocation.value != null)
                     Marker(
                       point: controller.currentUserLocation.value!,
-                      width: 24,
-                      height: 24,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.blue,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
-                          boxShadow: const [
-                            BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))
-                          ],
-                        ),
+                      width: 60,
+                      height: 60,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Direction Arrow/Cone
+                          Transform.rotate(
+                            angle: (controller.currentHeading.value * (3.14159 / 180)),
+                            child: CustomPaint(
+                              size: const Size(60, 60),
+                              painter: DirectionPainter(),
+                            ),
+                          ),
+                          // Center Dot
+                          Container(
+                            width: 16,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: Colors.blue,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: const [
+                                BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                 ],
@@ -245,4 +255,28 @@ class MapView extends GetView<SoundMapController> {
       )),
     );
   }
+}
+
+class DirectionPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          Colors.blue.withValues(alpha: 0.6),
+          Colors.blue.withValues(alpha: 0.0),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+
+    final path = Path();
+    path.moveTo(size.width / 2, size.height / 2);
+    path.relativeLineTo(-size.width / 4, -size.height / 2);
+    path.relativeLineTo(size.width / 2, 0);
+    path.close();
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }

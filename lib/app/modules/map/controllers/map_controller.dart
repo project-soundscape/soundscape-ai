@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import '../../../data/models/recording_model.dart';
 import '../../../data/services/storage_service.dart';
 import '../../../data/services/location_service.dart';
@@ -20,22 +21,29 @@ class SoundMapController extends GetxController {
   
   final Rx<LatLng> initialCenter = LatLng(0, 0).obs; 
   final Rx<LatLng?> currentUserLocation = Rx<LatLng?>(null);
+  final RxDouble currentHeading = 0.0.obs;
   
   final RxBool isLoading = true.obs;
   final RxString searchQuery = ''.obs;
 
   StreamSubscription<Position>? _positionSubscription;
+  StreamSubscription<CompassEvent>? _headingSubscription;
 
   @override
   void onInit() {
     super.onInit();
     _determineInitialPosition();
+    
+    // Listen to recording changes reactively
+    ever(_storageService.recordings, (_) => loadMarkers(searchQuery.value));
+    
     loadMarkers();
   }
 
   @override
   void onClose() {
     _positionSubscription?.cancel();
+    _headingSubscription?.cancel();
     super.onClose();
   }
 
@@ -51,6 +59,7 @@ class SoundMapController extends GetxController {
       if (status.isGranted) {
         // Start streaming for high accuracy
         _startLocationTracking();
+        _startHeadingTracking();
         
         // Also get immediate position for initial centering
         try {
@@ -94,6 +103,15 @@ class SoundMapController extends GetxController {
       },
       onError: (e) => print("Location Stream Error: $e"),
     );
+  }
+
+  void _startHeadingTracking() {
+    _headingSubscription?.cancel();
+    _headingSubscription = _locationService.getHeadingStream()?.listen((event) {
+      if (event.heading != null) {
+        currentHeading.value = event.heading!;
+      }
+    });
   }
 
   void _fallbackToRecordings() {

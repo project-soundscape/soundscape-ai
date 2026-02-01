@@ -1,5 +1,6 @@
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 
 class LocationService extends GetxService {
   Future<Position?> getCurrentLocation() async {
@@ -25,17 +26,27 @@ class LocationService extends GetxService {
     }
 
     return await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.bestForNavigation,
-      forceAndroidLocationManager: false, // Use fused location provider
+      locationSettings: AndroidSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        intervalDuration: const Duration(seconds: 1),
+      ),
     );
+  }
+
+  Future<Position?> getLastKnownLocation() async {
+    return await Geolocator.getLastKnownPosition();
   }
 
   Stream<Position> getPositionStream() {
     return Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 5, // Update every 5 meters
+        distanceFilter: 0, // Continuous updates for "exact" location
       ),
     );
+  }
+
+  Stream<CompassEvent>? getHeadingStream() {
+    return FlutterCompass.events;
   }
 }

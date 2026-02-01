@@ -26,6 +26,9 @@ class AppwriteService extends GetxService {
 
   String? _userId;
   bool _userDocExists = false;
+  
+  final isLoggedIn = false.obs;
+  final currentUser = Rxn<models.User>();
 
   Future<AppwriteService> init() async {
     client = Client()
@@ -36,19 +39,36 @@ class AppwriteService extends GetxService {
     databases = Databases(client);
     storage = Storage(client);
 
-    try {
-      await _initUserAndDoc();
-    } catch (_) {
-      // Not logged in
-    }
+    await refreshAuthStatus();
     
     return this;
+  }
+
+  @override
+  void onReady() {
+    super.onReady();
+    refreshAuthStatus();
+  }
+
+  Future<void> refreshAuthStatus() async {
+    try {
+      final user = await account.get();
+      _userId = user.$id;
+      currentUser.value = user;
+      isLoggedIn.value = true;
+      await _initUserAndDoc();
+    } catch (_) {
+      _userId = null;
+      currentUser.value = null;
+      isLoggedIn.value = false;
+      _userDocExists = false;
+    }
   }
 
   Future<void> login(String email, String password) async {
     try {
       await account.createEmailPasswordSession(email: email, password: password);
-      await _initUserAndDoc();
+      await refreshAuthStatus();
     } catch (e) {
       throw Exception("Login failed: ${e.toString()}");
     }
@@ -65,9 +85,14 @@ class AppwriteService extends GetxService {
   Future<void> logout() async {
     try {
       await account.deleteSession(sessionId: 'current');
+      await refreshAuthStatus();
+    } catch (_) {
+      // Force reset even if deleteSession fails (e.g. session already gone)
       _userId = null;
+      currentUser.value = null;
+      isLoggedIn.value = false;
       _userDocExists = false;
-    } catch (_) {}
+    }
   }
 
   Future<models.User?> getCurrentUser() async {
@@ -101,7 +126,7 @@ class AppwriteService extends GetxService {
           id: doc.$id,
           path: path,
           timestamp: DateTime.parse(doc.$createdAt),
-          duration: const Duration(seconds: 0), 
+          duration: Duration(seconds: data['duration'] ?? 0), 
           latitude: (data['latitude'] as num?)?.toDouble(),
           longitude: (data['longitude'] as num?)?.toDouble(),
           status: (data['status'] as String?)?.toLowerCase() ?? 'pending',
@@ -205,12 +230,13 @@ class AppwriteService extends GetxService {
       final doc = await databases.createDocument(
         databaseId: databaseId,
         collectionId: recordingsCollectionId,
-        documentId: ID.unique(),
+        documentId: recording.id, 
         data: {
           's3key': upload.$id,
           'status': 'QUEUED',
           'latitude': recording.latitude,
           'longitude': recording.longitude,
+          'duration': recording.duration.inSeconds,
           'user-id': _userDocExists ? _userId : null, 
         },
         permissions: [
@@ -322,11 +348,20 @@ class AppwriteService extends GetxService {
   Future<void> deleteRecording(String docId) async {
     try {
       // 1. Get document to find fileId
-      final doc = await databases.getDocument(
-        databaseId: databaseId,
-        collectionId: recordingsCollectionId,
-        documentId: docId,
-      );
+      models.Document doc;
+      try {
+        doc = await databases.getDocument(
+          databaseId: databaseId,
+          collectionId: recordingsCollectionId,
+          documentId: docId,
+        );
+      } on AppwriteException catch (e) {
+        if (e.code == 404) {
+          print("Appwrite: Document already gone or never uploaded.");
+          return; // Already deleted or doesn't exist
+        }
+        rethrow;
+      }
       
       final fileId = doc.data['s3key'];
       
@@ -335,20 +370,24 @@ class AppwriteService extends GetxService {
         try {
           await storage.deleteFile(bucketId: bucketId, fileId: fileId);
         } catch (e) {
-          print("Appwrite: Error deleting file: $e");
+          print("Appwrite: Error deleting file (might be already gone): $e");
         }
       }
 
       // 3. Delete Document
-      await databases.deleteDocument(
-        databaseId: databaseId,
-        collectionId: recordingsCollectionId,
-        documentId: docId,
-      );
+      try {
+        await databases.deleteDocument(
+          databaseId: databaseId,
+          collectionId: recordingsCollectionId,
+          documentId: docId,
+        );
+      } on AppwriteException catch (e) {
+        if (e.code != 404) rethrow;
+      }
       
     } catch (e) {
       print("Appwrite: Error deleting recording: $e");
-      throw Exception("Failed to delete remote recording");
+      rethrow; // Re-throw to let controller handle it
     }
   }
 

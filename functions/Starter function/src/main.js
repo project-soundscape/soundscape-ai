@@ -9,7 +9,7 @@ export default async ({ req, res, log, error }) => {
     .setKey(req.headers['x-appwrite-key'] ?? process.env.APPWRITE_API_KEY);
 
   const databases = new Databases(client);
-  const storage = Storage(client);
+  const storage = new Storage(client);
 
   const DATABASE_ID = process.env.APPWRITE_DATABASE_ID || "68da4b6900256869e751";
   const RECORDINGS_COLLECTION_ID = "recordings";
@@ -19,8 +19,8 @@ export default async ({ req, res, log, error }) => {
   
   const HF_API_URL = "https://shabeer-wms-multi-sound-api.hf.space/classify/perch";
 
+  let payload = {};
   try {
-    let payload = {};
     if (req.body) {
         if (typeof req.body === 'object') {
             payload = req.body;
@@ -61,11 +61,24 @@ export default async ({ req, res, log, error }) => {
         }
     }
 
-    // ACTION: Analyze Recording (Default/Event)
-    // Event triggers send the document in body.
-    // HTTP triggers might send { s3key: ... }
+    // Detect if this is an Event Trigger or HTTP Trigger
+    const event = req.headers['x-appwrite-event'];
+    log(`Triggered by event: ${event || 'HTTP'}`);
+
+    // If event is 'databases.*.collections.recordings.documents.*.create'
+    // or 'databases.*.collections.recordings.documents.*.update'
+    // Appwrite sends the document in req.body
     
     let recordingDoc = payload;
+
+    // IMPORTANT: If this is an update event, check if status changed to 'QUEUED' 
+    // to avoid infinite loops when we update status to 'PROCESSING' or 'COMPLETED'
+    if (event && event.includes('.update')) {
+        if (recordingDoc.status !== 'QUEUED') {
+            log('Document updated but status is not QUEUED. Skipping.');
+            return res.json({ success: true, message: "Skipping non-queued update" });
+        }
+    }
 
     if (!recordingDoc || !recordingDoc.s3key) {
         // If we are here and it's not a user action, return neutral
@@ -78,12 +91,16 @@ export default async ({ req, res, log, error }) => {
     log(`Processing Recording: ${recordingId}, File: ${fileId}`);
 
     // Update status to PROCESSING
-    await databases.updateDocument(
-        DATABASE_ID,
-        RECORDINGS_COLLECTION_ID,
-        recordingId,
-        { status: 'PROCESSING' }
-    );
+    try {
+        await databases.updateDocument(
+            DATABASE_ID,
+            RECORDINGS_COLLECTION_ID,
+            recordingId,
+            { status: 'PROCESSING' }
+        );
+    } catch (e) {
+        log(`Warning: Could not update status to PROCESSING: ${e.message}`);
+    }
 
     // 2. Download File
     const fileBuffer = await storage.getFileDownload(BUCKET_ID, fileId);
@@ -100,6 +117,7 @@ export default async ({ req, res, log, error }) => {
         },
         maxBodyLength: Infinity,
         maxContentLength: Infinity,
+        timeout: 240000 // 4 minute axios timeout
     });
 
     const predictions = hfResponse.data.predictions;
@@ -144,15 +162,19 @@ export default async ({ req, res, log, error }) => {
     if(err.response) error(`API Error Data: ${JSON.stringify(err.response.data)}`);
     
     // Try to update status to FAILED
-    if (req.body && req.body.$id) {
+    const recordingId = payload?.$id;
+    if (recordingId) {
          try {
             await databases.updateDocument(
                 DATABASE_ID,
                 RECORDINGS_COLLECTION_ID,
-                req.body.$id,
+                recordingId,
                 { status: 'FAILED' }
             );
-         } catch(e) {}
+            log(`Updated status to FAILED for ${recordingId}`);
+         } catch(e) {
+            error(`Failed to update status to FAILED: ${e.message}`);
+         }
     }
 
     return res.json({

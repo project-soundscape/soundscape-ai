@@ -9,13 +9,6 @@ class LibraryView extends GetView<LibraryController> {
 
   @override
   Widget build(BuildContext context) {
-    // Ensure controller is loaded if not already (though Binding handles it)
-    if(!Get.isRegistered<LibraryController>()) {
-      Get.put(LibraryController());
-    } else {
-      controller.refreshList(); // refresh when rebuilt
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Library'),

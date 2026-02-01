@@ -94,28 +94,50 @@ class HomeView extends GetView<HomeController> {
                     );
                   } else {
                     // Recording State
-                    return GestureDetector(
-                      onTap: controller.toggleRecording,
-                      child: Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: controller.isRecording.value ? Colors.redAccent : Colors.teal,
-                          boxShadow: [
-                            BoxShadow(
-                              color: (controller.isRecording.value ? Colors.redAccent : Colors.teal).withOpacity(0.4),
-                              blurRadius: 20,
-                              spreadRadius: 5,
-                            )
-                          ],
+                    return Column(
+                      children: [
+                        GestureDetector(
+                          onTap: controller.toggleRecording,
+                          child: Obx(() {
+                            final bool isUnderMin = controller.isRecording.value && controller.globalDuration.value.inSeconds < 15;
+                            return Container(
+                              width: 120,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: controller.isRecording.value 
+                                  ? (isUnderMin ? Colors.grey[400] : Colors.redAccent) 
+                                  : Colors.teal,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: (controller.isRecording.value 
+                                      ? (isUnderMin ? Colors.grey : Colors.redAccent) 
+                                      : Colors.teal).withOpacity(0.4),
+                                    blurRadius: 20,
+                                    spreadRadius: 5,
+                                  )
+                                ],
+                              ),
+                              child: Icon(
+                                controller.isRecording.value ? Icons.stop : Icons.mic,
+                                size: 56,
+                                color: Colors.white,
+                              ),
+                            );
+                          }),
                         ),
-                        child: Icon(
-                          controller.isRecording.value ? Icons.stop : Icons.mic,
-                          size: 56,
-                          color: Colors.white,
-                        ),
-                      ),
+                        if (controller.isRecording.value) ...[
+                          const SizedBox(height: 32),
+                          TextButton.icon(
+                            onPressed: controller.discardRecording,
+                            icon: const Icon(Icons.close, color: Colors.grey),
+                            label: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            ),
+                          ),
+                        ]
+                      ],
                     );
                   }
                 }),

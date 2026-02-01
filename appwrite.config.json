@@ -50,14 +50,72 @@
             "logging": true,
             "runtime": "node-22",
             "scopes": [
-                "users.read"
+                "sessions.write",
+                "users.read",
+                "users.write",
+                "teams.read",
+                "teams.write",
+                "databases.read",
+                "databases.write",
+                "policies.read",
+                "policies.write",
+                "archives.read",
+                "archives.write",
+                "restorations.read",
+                "restorations.write",
+                "tables.read",
+                "collections.read",
+                "tables.write",
+                "collections.write",
+                "columns.read",
+                "attributes.read",
+                "columns.write",
+                "attributes.write",
+                "indexes.read",
+                "indexes.write",
+                "rows.read",
+                "documents.read",
+                "rows.write",
+                "documents.write",
+                "files.read",
+                "files.write",
+                "buckets.read",
+                "buckets.write",
+                "functions.read",
+                "functions.write",
+                "execution.read",
+                "execution.write",
+                "targets.read",
+                "targets.write",
+                "providers.read",
+                "providers.write",
+                "messages.read",
+                "messages.write",
+                "topics.read",
+                "topics.write",
+                "subscribers.read",
+                "subscribers.write",
+                "locale.read",
+                "avatars.read",
+                "health.read",
+                "migrations.read",
+                "migrations.write",
+                "tokens.read",
+                "tokens.write",
+                "sites.read",
+                "sites.write",
+                "log.read",
+                "log.write"
             ],
-            "events": [],
+            "events": [
+                "databases.68da4b6900256869e751.collections.recordings.documents.*.create",
+                "databases.68da4b6900256869e751.collections.recordings.documents.*.update"
+            ],
             "schedule": "",
-            "timeout": 15,
+            "timeout": 300,
             "entrypoint": "src/main.js",
             "commands": "npm install",
-            "specification": "s-0.5vcpu-512mb",
+            "specification": "s-2vcpu-4gb",
             "path": "functions/Starter function"
         }
     ],
@@ -71,7 +129,12 @@
     "tables": [
         {
             "$id": "users",
-            "$permissions": [],
+            "$permissions": [
+                "create(\"users\")",
+                "read(\"users\")",
+                "update(\"users\")",
+                "delete(\"users\")"
+            ],
             "databaseId": "68da4b6900256869e751",
             "name": "users",
             "enabled": true,
@@ -102,7 +165,12 @@
         },
         {
             "$id": "recordings",
-            "$permissions": [],
+            "$permissions": [
+                "create(\"users\")",
+                "read(\"users\")",
+                "update(\"users\")",
+                "delete(\"users\")"
+            ],
             "databaseId": "68da4b6900256869e751",
             "name": "Recordings",
             "enabled": true,
@@ -160,13 +228,24 @@
                     "min": -1.7976931348623157e+308,
                     "max": 1.7976931348623157e+308,
                     "default": null
+                },
+                {
+                    "key": "duration",
+                    "type": "integer",
+                    "required": false,
+                    "array": false,
+                    "min": 0,
+                    "max": 2147483647,
+                    "default": 0
                 }
             ],
             "indexes": []
         },
         {
             "$id": "detections",
-            "$permissions": [],
+            "$permissions": [
+                "read(\"users\")"
+            ],
             "databaseId": "68da4b6900256869e751",
             "name": "Detections",
             "enabled": true,

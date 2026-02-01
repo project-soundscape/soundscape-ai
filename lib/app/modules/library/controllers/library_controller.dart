@@ -13,30 +13,25 @@ class LibraryController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    
+    // Listen to local changes reactively
+    ever(_storageService.recordings, (List<Recording> local) {
+      recordings.assignAll(local);
+    });
+    
+    // Initial load
+    recordings.assignAll(_storageService.getRecordings());
+    
     loadRecordings();
   }
 
   Future<void> loadRecordings() async {
     isLoading.value = true;
     try {
-      // 1. Load Local first for immediate display
-      final local = _storageService.getRecordings();
-      recordings.assignAll(local);
-
-      // 2. Fetch Remote
+      // 1. Fetch Remote
       final remote = await _appwriteService.getUserRecordings();
       
-      // 3. Merge: Remote takes precedence (updated status/analysis)
-      final Map<String, Recording> merged = {};
-      for (var rec in local) merged[rec.id] = rec;
-      for (var rec in remote) merged[rec.id] = rec;
-
-      final sorted = merged.values.toList()
-        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      
-      recordings.assignAll(sorted);
-      
-      // 4. Sync back to local storage
+      // 2. Sync remote to local storage (which will trigger the 'ever' listener)
       for (var rec in remote) {
          await _storageService.updateRecording(rec);
       }
