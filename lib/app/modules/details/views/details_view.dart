@@ -7,23 +7,27 @@ import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../controllers/details_controller.dart';
 
+import '../../../data/services/audio_analysis_service.dart';
+
 class DetailsView extends GetView<DetailsController> {
   const DetailsView({super.key});
   
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final analysisService = Get.find<AudioAnalysisService>();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Clip details'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
+        backgroundColor: isDark ? null : Colors.white,
+        foregroundColor: isDark ? Colors.white : Colors.black87,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close),
-          onPressed: () => Get.back(),
+          onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      backgroundColor: Colors.grey[50],
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -33,6 +37,7 @@ class DetailsView extends GetView<DetailsController> {
               // Main Card
               Card(
                 elevation: 0,
+                color: isDark ? Colors.grey[900] : Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                 child: Padding(
                   padding: const EdgeInsets.all(20.0),
@@ -42,6 +47,20 @@ class DetailsView extends GetView<DetailsController> {
                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                          children: [
                            Expanded(child: Text(controller.recording.commonName ?? 'Processing...', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                           if (controller.recording.confidence != null)
+                             Container(
+                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                               margin: const EdgeInsets.only(right: 8),
+                               decoration: BoxDecoration(
+                                 color: Colors.green.withOpacity(0.1),
+                                 borderRadius: BorderRadius.circular(8),
+                                 border: Border.all(color: Colors.green.withOpacity(0.3)),
+                               ),
+                               child: Text(
+                                 '${(controller.recording.confidence! * 100).toInt()}%',
+                                 style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12),
+                               ),
+                             ),
                            Container(
                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                              decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(8)),
@@ -58,9 +77,9 @@ class DetailsView extends GetView<DetailsController> {
                          height: 100,
                          width: double.infinity,
                          decoration: BoxDecoration(
-                           color: Colors.grey[50],
+                           color: isDark ? Colors.black26 : Colors.grey[50],
                            borderRadius: BorderRadius.circular(12),
-                           border: Border.all(color: Colors.grey[200]!)
+                           border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!)
                          ),
                          child: AudioFileWaveforms(
                             size: Size(MediaQuery.of(context).size.width - 80, 100.0),
@@ -102,6 +121,101 @@ class DetailsView extends GetView<DetailsController> {
               
               const SizedBox(height: 24),
               
+              // YAMNet Analysis Card
+              Obx(() {
+                final isPlaying = controller.isPlaying.value;
+                final livePredictions = analysisService.topPredictions;
+                final hasStaticPredictions = controller.recording.predictions != null && controller.recording.predictions!.isNotEmpty;
+                
+                // Show live predictions if they are available (even if not playing)
+                // Otherwise fallback to static predictions from the recording object
+                final bool useLive = livePredictions.isNotEmpty;
+                
+                if (!useLive && !hasStaticPredictions) return const SizedBox.shrink();
+
+                final List<MapEntry<String, double>> displayPredictions = useLive
+                    ? livePredictions
+                    : (controller.recording.predictions?.entries.toList() ?? []);
+
+                return Card(
+                  elevation: 0,
+                  color: isDark ? Colors.grey[900] : Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  margin: const EdgeInsets.only(bottom: 24),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              isPlaying ? 'Live Analysis' : 'Analysis Results', 
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.tealAccent : Colors.teal)
+                            ),
+                            if (isPlaying)
+                              Container(
+                                width: 12,
+                                height: 12,
+                                margin: const EdgeInsets.only(left: 8),
+                                child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.teal),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        ...displayPredictions.map((e) {
+                          final score = e.value;
+                          final isTop = e.key == controller.recording.commonName;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12.0),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 100,
+                                  child: Text(
+                                    e.key,
+                                    style: TextStyle(
+                                      fontWeight: isTop ? FontWeight.bold : FontWeight.normal,
+                                      color: isTop ? (isDark ? Colors.white : Colors.black87) : Colors.grey,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TweenAnimationBuilder<double>(
+                                    tween: Tween<double>(begin: 0, end: score),
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeOutCubic,
+                                    builder: (context, value, child) {
+                                      return ClipRRect(
+                                        borderRadius: BorderRadius.circular(4),
+                                        child: LinearProgressIndicator(
+                                          value: value,
+                                          backgroundColor: isDark ? Colors.grey[800] : Colors.grey[100],
+                                          color: isTop ? Colors.teal : Colors.grey[400],
+                                          minHeight: 10,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  "${(score * 100).toInt()}%",
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                )
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+
               // SPECIES INSIGHT CARD
               Obx(() {
                 if (controller.isLoadingWiki.value) {
@@ -116,6 +230,7 @@ class DetailsView extends GetView<DetailsController> {
 
                 return Card(
                   elevation: 2,
+                  color: isDark ? Colors.grey[900] : Colors.white,
                   margin: const EdgeInsets.only(bottom: 24),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                   clipBehavior: Clip.antiAlias,
@@ -145,7 +260,7 @@ class DetailsView extends GetView<DetailsController> {
                             const SizedBox(height: 8),
                             Text(
                               info['description'] ?? 'No description available.',
-                              style: TextStyle(color: Colors.grey[700], height: 1.4),
+                              style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], height: 1.4),
                             ),
                             const SizedBox(height: 20),
                             const Text('Real World Options', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
@@ -201,9 +316,9 @@ class DetailsView extends GetView<DetailsController> {
                 ],
               ),
               const SizedBox(height: 16),
-              _buildMetaItem('Location', '${controller.recording.latitude?.toStringAsFixed(4)}, ${controller.recording.longitude?.toStringAsFixed(4)}'),
-              _buildMetaItem('Date & time', DateFormat.yMMMd().add_jm().format(controller.recording.timestamp)),
-              _buildMetaItem('ID', controller.recording.id.substring(0, 8)),
+              _buildMetaItem(context, 'Location', '${controller.recording.latitude?.toStringAsFixed(4)}, ${controller.recording.longitude?.toStringAsFixed(4)}'),
+              _buildMetaItem(context, 'Date & time', DateFormat.yMMMd().add_jm().format(controller.recording.timestamp)),
+              _buildMetaItem(context, 'ID', controller.recording.id.substring(0, 8)),
               
               const SizedBox(height: 24),
               const Text('Map Location', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -242,7 +357,7 @@ class DetailsView extends GetView<DetailsController> {
               else
                  Container(
                    height: 200,
-                   decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(16)),
+                   decoration: BoxDecoration(color: isDark ? Colors.grey[800] : Colors.grey[200], borderRadius: BorderRadius.circular(16)),
                    child: const Center(child: Text('No Location Data')),
                  ),
                  
@@ -268,15 +383,15 @@ class DetailsView extends GetView<DetailsController> {
     );
   }
   
-  Widget _buildMetaItem(String label, String value) {
+  Widget _buildMetaItem(BuildContext context, String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+          Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge?.color)),
           const SizedBox(height: 4),
-          Text(value, style: const TextStyle(color: Colors.black54)),
+          Text(value, style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7))),
         ],
       ),
     );

@@ -12,6 +12,7 @@ class Recording {
   String? commonName;
   double? confidence;
   String? notes;
+  Map<String, double>? predictions;
 
   Recording({
     required this.id,
@@ -25,6 +26,7 @@ class Recording {
     this.commonName,
     this.confidence,
     this.notes,
+    this.predictions,
   });
 
   Map<String, dynamic> toMap() {
@@ -40,6 +42,7 @@ class Recording {
       'commonName': commonName,
       'confidence': confidence,
       'notes': notes,
+      'predictions': predictions,
     };
   }
 
@@ -56,6 +59,9 @@ class Recording {
       commonName: map['commonName'],
       confidence: map['confidence'],
       notes: map['notes'],
+      predictions: map['predictions'] != null 
+          ? Map<String, double>.from(map['predictions']) 
+          : null,
     );
   }
 

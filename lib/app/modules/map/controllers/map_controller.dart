@@ -28,6 +28,8 @@ class SoundMapController extends GetxController {
   
   final RxBool isLoading = true.obs;
   final RxString searchQuery = ''.obs;
+  final filterOptions = FilterOptions().obs;
+  final textController = TextEditingController();
 
   StreamSubscription<Position>? _positionSubscription;
   StreamSubscription<CompassEvent>? _headingSubscription;
@@ -37,8 +39,10 @@ class SoundMapController extends GetxController {
     super.onInit();
     _determineInitialPosition();
     
-    // Listen to recording changes reactively
-    ever(_storageService.recordings, (_) => loadMarkers(searchQuery.value));
+    // Listen to changes
+    ever(_storageService.recordings, (_) => loadMarkers());
+    ever(searchQuery, (_) => loadMarkers());
+    ever(filterOptions, (_) => loadMarkers());
     
     loadMarkers();
   }
@@ -47,24 +51,21 @@ class SoundMapController extends GetxController {
   void onClose() {
     _positionSubscription?.cancel();
     _headingSubscription?.cancel();
+    textController.dispose();
     super.onClose();
   }
 
   Future<void> _determineInitialPosition() async {
     isLoading.value = true;
     try {
-      // 1. Request permission explicitly
       var status = await Permission.location.status;
       if (!status.isGranted) {
         status = await Permission.location.request();
       }
 
       if (status.isGranted) {
-        // Start streaming for high accuracy
         _startLocationTracking();
         _startHeadingTracking();
-        
-        // Also get immediate position for initial centering
         try {
           final pos = await _locationService.getCurrentLocation();
           if (pos != null) {
@@ -80,7 +81,6 @@ class SoundMapController extends GetxController {
           print("Map: Initial location error: $e");
         }
       } else {
-         // Fallback to latest recording if no permission
          _fallbackToRecordings();
       }
     } finally {
@@ -96,7 +96,6 @@ class SoundMapController extends GetxController {
         currentUserLocation.value = latLng;
         _sortRecordingsByDistance();
         
-        // If it's the very first time we get a location and center is 0,0, move there
         if (initialCenter.value.latitude == 0 && initialCenter.value.longitude == 0) {
           initialCenter.value = latLng;
           try {
@@ -127,11 +126,13 @@ class SoundMapController extends GetxController {
     }
   }
 
-  void loadMarkers([String? query]) {
+  void loadMarkers([String? _]) {
     var recordings = _storageService.getRecordings();
+    final query = searchQuery.value;
+    final filters = filterOptions.value;
     
-    // Filter if query exists
-    if (query != null && query.isNotEmpty) {
+    // 1. Text Search
+    if (query.isNotEmpty) {
       final lowerQuery = query.toLowerCase();
       recordings = recordings.where((rec) {
         final name = rec.commonName?.toLowerCase() ?? '';
@@ -140,19 +141,28 @@ class SoundMapController extends GetxController {
         return name.contains(lowerQuery) || notes.contains(lowerQuery) || tags.contains(lowerQuery);
       }).toList();
     }
+    
+    // 2. Apply Filters
+    if (filters.status != 'All') {
+       recordings = recordings.where((r) => r.status.toLowerCase() == filters.status.toLowerCase()).toList();
+    }
+    
+    if (filters.minConfidence > 0) {
+       recordings = recordings.where((r) => (r.confidence ?? 0) >= filters.minConfidence).toList();
+    }
+    
+    if (filters.startDate != null) {
+       recordings = recordings.where((r) => r.timestamp.isAfter(filters.startDate!)).toList();
+    }
+    
+    if (filters.endDate != null) {
+       recordings = recordings.where((r) => r.timestamp.isBefore(filters.endDate!.add(const Duration(days: 1)))).toList();
+    }
 
     markers.clear();
     visibleRecordings.assignAll(recordings);
     _sortRecordingsByDistance();
     
-    // Only update center on first load (no query) if we haven't found user location
-    if ((query == null || query.isEmpty) && recordings.isNotEmpty && initialCenter.value == LatLng(0, 0)) {
-      final first = recordings.first;
-      if (first.latitude != null && first.longitude != null) {
-        initialCenter.value = LatLng(first.latitude!, first.longitude!);
-      }
-    }
-
     for (var rec in recordings) {
       if (rec.latitude != null && rec.longitude != null) {
         markers.add(
@@ -188,7 +198,6 @@ class SoundMapController extends GetxController {
                     ),
                   );
                 }
-                // Fallback while loading or if no image
                 return _defaultMarker();
               },
             )
@@ -218,10 +227,37 @@ class SoundMapController extends GetxController {
       return distA.compareTo(distB);
     });
   }
+  
+  void updateFilterStatus(String status) {
+    filterOptions.update((val) {
+      val?.status = status;
+    });
+  }
+  
+  void updateMinConfidence(double confidence) {
+    filterOptions.update((val) {
+      val?.minConfidence = confidence;
+    });
+  }
+  
+  void updateDateRange(DateTime? start, DateTime? end) {
+    filterOptions.update((val) {
+      val?.startDate = start;
+      val?.endDate = end;
+    });
+  }
+  
+  void resetFilters() {
+    filterOptions.value = FilterOptions();
+  }
 
   void onSearchChanged(String val) {
     searchQuery.value = val;
-    loadMarkers(val);
+  }
+  
+  void clearSearch() {
+    searchQuery.value = '';
+    textController.clear();
   }
 
   void zoomIn() {
@@ -242,7 +278,14 @@ class SoundMapController extends GetxController {
         mapController.move(currentUserLocation.value!, 18.0);
       } catch (_) {}
     } else {
-      _determineInitialPosition(); // Try fetching again
+      _determineInitialPosition(); 
     }
   }
+}
+
+class FilterOptions {
+  String status = 'All'; 
+  double minConfidence = 0.0;
+  DateTime? startDate;
+  DateTime? endDate;
 }

@@ -96,6 +96,23 @@ class AppwriteService extends GetxService {
     }
   }
 
+  Future<void> updateName(String name) async {
+    try {
+      await account.updateName(name: name);
+      await refreshAuthStatus();
+    } catch (e) {
+      throw Exception("Failed to update name: $e");
+    }
+  }
+
+  Future<void> updatePassword(String password, String oldPassword) async {
+    try {
+      await account.updatePassword(password: password, oldPassword: oldPassword);
+    } catch (e) {
+      throw Exception("Failed to update password: $e");
+    }
+  }
+
   Future<models.User?> getCurrentUser() async {
     try {
       return await account.get();
@@ -402,6 +419,21 @@ class AppwriteService extends GetxService {
           recording.commonName = scientificNames.first.toString();
           recording.status = 'processed';
           
+          // Populate predictions map
+          if (confidence != null) {
+            final preds = <String, double>{};
+            for (int i = 0; i < scientificNames.length; i++) {
+              if (i < confidence.length) {
+                final name = scientificNames[i].toString();
+                final conf = confidence[i];
+                if (conf is num) {
+                  preds[name] = conf.toDouble();
+                }
+              }
+            }
+            recording.predictions = preds;
+          }
+
           if(confidence != null && confidence.isNotEmpty) {
              // Handle Int to Double conversion
              final confVal = confidence.first;

@@ -9,6 +9,14 @@ class LibraryController extends GetxController {
   
   final recordings = <Recording>[].obs;
   final RxBool isLoading = false.obs;
+  final searchQuery = ''.obs;
+
+  List<Recording> get filteredRecordings {
+    if (searchQuery.isEmpty) return recordings;
+    return recordings.where((rec) {
+      return (rec.commonName ?? '').toLowerCase().contains(searchQuery.value.toLowerCase());
+    }).toList();
+  }
 
   @override
   void onInit() {

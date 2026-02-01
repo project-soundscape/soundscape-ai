@@ -19,6 +19,13 @@ class LoginView extends GetView<AuthController> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                   Center(
+                     child: Image.asset(
+                       'assets/tflite/images/logo.jpeg',
+                       height: 100,
+                     ),
+                   ),
+                   const SizedBox(height: 32),
                    const Text(
                     'Welcome Back',
                     style: TextStyle(

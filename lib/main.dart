@@ -19,7 +19,18 @@ void main() async {
       theme: ThemeData(
         primarySwatch: Colors.teal,
         scaffoldBackgroundColor: Colors.grey[50],
+        brightness: Brightness.light,
       ),
+      darkTheme: ThemeData(
+        primarySwatch: Colors.teal,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF1F1F1F),
+          foregroundColor: Colors.white,
+        ),
+      ),
+      themeMode: ThemeMode.system, // Will be overridden by controller logic
       initialRoute: AppPages.INITIAL,
       getPages: AppPages.routes,
     ),

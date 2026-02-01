@@ -2,105 +2,256 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/settings_controller.dart';
 
+import 'edit_profile_view.dart';
+
 class SettingsView extends GetView<SettingsController> {
   const SettingsView({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        elevation: 0,
-      ),
-      backgroundColor: Colors.grey[50],
-      body: Obx(
-        () => ListView(
-          children: [
-            const SizedBox(height: 20),
-            _buildSectionHeader('Account'),
-            ListTile(
-              leading: const Icon(Icons.person_outline),
-              title: Text(controller.userName),
-              subtitle: Text(controller.userEmail),
-              trailing: controller.isLoggedIn
-                  ? const Icon(Icons.logout, color: Colors.redAccent)
-                  : const Icon(Icons.login, color: Colors.teal),
-              onTap: () {
-                if (controller.isLoggedIn) {
-                  Get.dialog(
-                    AlertDialog(
-                      title: const Text('Logout'),
-                      content: const Text('Are you sure you want to logout?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Get.back(),
-                          child: const Text('Cancel'),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            Get.back();
-                            controller.logout();
-                          },
-                          child: const Text(
-                            'Logout',
-                            style: TextStyle(color: Colors.red),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                } else {
-                  Get.toNamed('/login'); // Adjust route as needed
-                }
-              },
-            ),
-            const Divider(),
-            _buildSectionHeader('App Info'),
-            ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('About Project Soundscape'),
-              onTap: () {
-                showAboutDialog(
-                  context: context,
-                  applicationName: 'Project Soundscape',
-                  applicationVersion: controller.appVersion.value,
-                  applicationLegalese: '© 2026 SoundScape Team',
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: 200.0,
+            backgroundColor: Colors.teal,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.teal, Color(0xFF00897B)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
-                      'A citizen science app to monitor biodiversity and noise pollution.',
+                    const SizedBox(height: 40),
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.2),
+                      ),
+                      child: CircleAvatar(
+                        radius: 40,
+                        backgroundColor: Colors.white,
+                        child: Text(
+                          controller.userName.isNotEmpty ? controller.userName[0].toUpperCase() : '?',
+                          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.teal),
+                        ),
+                      ),
                     ),
+                    const SizedBox(height: 12),
+                    Obx(() => Text(
+                      controller.userName,
+                      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                    )),
+                    Obx(() => Text(
+                      controller.userEmail,
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 14),
+                    )),
                   ],
-                );
-              },
-            ),
-            Obx(
-              () => ListTile(
-                leading: const Icon(Icons.verified_outlined),
-                title: const Text('Version'),
-                trailing: Text(
-                  controller.appVersion.value,
-                  style: const TextStyle(color: Colors.grey),
                 ),
               ),
             ),
-          ],
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSectionTitle('Preferences'),
+                  _buildSettingsCard(context, [
+                    _buildSwitchTile(
+                      'Dark Mode',
+                      Icons.dark_mode_outlined,
+                      controller.isDarkMode,
+                      (val) => controller.toggleTheme(val),
+                    ),
+                    _buildDivider(isDark),
+                    _buildSwitchTile(
+                      'Notifications',
+                      Icons.notifications_outlined,
+                      controller.notificationsEnabled,
+                      (val) => controller.toggleNotifications(val),
+                    ),
+                  ]),
+                  const SizedBox(height: 24),
+                  _buildSectionTitle('Account'),
+                  _buildSettingsCard(context, [
+                    _buildActionTile(
+                      'Edit Profile',
+                      Icons.person_outline,
+                      () => Get.to(() => const EditProfileView()),
+                    ),
+                    _buildDivider(isDark),
+                    _buildActionTile(
+                      'Logout',
+                      Icons.logout,
+                      () => _showLogoutDialog(context),
+                      isDestructive: true,
+                    ),
+                  ]),
+                  const SizedBox(height: 24),
+                  _buildSectionTitle('About'),
+                  _buildSettingsCard(context, [
+                    _buildActionTile(
+                      'About SoundScape',
+                      Icons.info_outline,
+                      () => showAboutDialog(
+                        context: context,
+                        applicationName: 'Project Soundscape',
+                        applicationVersion: controller.appVersion.value,
+                        applicationLegalese: '© 2026 SoundScape Team',
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(top: 16),
+                            child: Text('A citizen science app to monitor biodiversity and noise pollution.'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _buildDivider(isDark),
+                    Obx(() => ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.verified_outlined, color: Colors.grey),
+                      ),
+                      title: const Text('Version', style: TextStyle(fontWeight: FontWeight.w500)),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.teal.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          controller.appVersion.value,
+                          style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      ),
+                    )),
+                  ]),
+                  const SizedBox(height: 40),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12, left: 4),
+      child: Text(
+        title.toUpperCase(),
+        style: TextStyle(
+          color: Colors.grey[600],
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.2,
         ),
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Text(
+  Widget _buildSettingsCard(BuildContext context, List<Widget> children) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey[900] : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildSwitchTile(String title, IconData icon, RxBool value, Function(bool) onChanged) {
+    return Obx(() => SwitchListTile(
+      value: value.value,
+      onChanged: onChanged,
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+      secondary: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.teal.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: Colors.teal),
+      ),
+      activeColor: Colors.teal,
+    ));
+  }
+
+  Widget _buildActionTile(String title, IconData icon, VoidCallback onTap, {bool isDestructive = false}) {
+    final color = isDestructive ? Colors.redAccent : Colors.teal;
+    return ListTile(
+      onTap: onTap,
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(
         title,
         style: TextStyle(
-          color: Colors.teal[800],
-          fontWeight: FontWeight.bold,
-          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: isDestructive ? Colors.redAccent : null, // Uses theme default if null
         ),
+      ),
+      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+    );
+  }
+
+  Widget _buildDivider(bool isDark) {
+    return Divider(height: 1, thickness: 1, color: isDark ? Colors.grey[800] : Colors.grey.withValues(alpha: 0.1));
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    Get.dialog(
+      AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to log out of your account?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Get.back();
+              controller.logout();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Logout'),
+          ),
+        ],
       ),
     );
   }

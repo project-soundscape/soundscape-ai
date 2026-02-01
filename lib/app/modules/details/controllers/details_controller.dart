@@ -1,18 +1,21 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:get/get.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:flutter/material.dart'; // for Colors
+import 'package:flutter/material.dart'; 
 import 'package:url_launcher/url_launcher.dart';
 import '../../../data/models/recording_model.dart';
 import '../../../data/services/appwrite_service.dart';
 import '../../../data/services/wiki_service.dart';
+import '../../../data/services/audio_analysis_service.dart';
 
 class DetailsController extends GetxController {
   late Recording recording;
   final player = FlutterSoundPlayer();
   final AppwriteService _appwriteService = Get.find<AppwriteService>();
+  final AudioAnalysisService _analysisService = Get.find<AudioAnalysisService>();
   final WikiService _wikiService = Get.put(WikiService());
   
   // Waveform Controller
@@ -24,6 +27,7 @@ class DetailsController extends GetxController {
   RxBool isUploading = false.obs;
   
   String? localFilePath;
+  RandomAccessFile? _audioFileHandle;
   
   // Species Info
   final Rxn<Map<String, dynamic>> speciesData = Rxn();
@@ -76,8 +80,20 @@ class DetailsController extends GetxController {
     }
     
     if (localFilePath != null) {
-      _initPlayer();
-      _prepareWaveform();
+      await _initPlayer();
+      await _prepareWaveform();
+      // Open file handle for analysis if it's a WAV
+      if (localFilePath!.endsWith('.wav')) {
+        try {
+          _audioFileHandle = await File(localFilePath!).open(mode: FileMode.read);
+          print("Details: Opened file handle for analysis: $localFilePath");
+          
+          // Pre-analyze the first chunk immediately so the UI is populated ASAP
+          await _analyzeChunkAt(Duration.zero);
+        } catch (e) {
+          print("Details: Error opening file handle: $e");
+        }
+      }
     }
   }
 
@@ -100,21 +116,65 @@ class DetailsController extends GetxController {
 
   Future<void> _initPlayer() async {
     await player.openPlayer();
-    player.setSubscriptionDuration(const Duration(milliseconds: 50));
+    player.setSubscriptionDuration(const Duration(milliseconds: 100));
     player.onProgress?.listen((e) {
       currentPosition.value = e.position;
       totalDuration.value = e.duration;
+      
+      // Perform YAMNet analysis during playback
+      _analyzeChunkAt(e.position);
+
       if (e.position >= e.duration) {
         isPlaying.value = false;
         currentPosition.value = Duration.zero;
+        _analysisService.topPredictions.clear();
       }
     });
+  }
+
+  Future<void> _analyzeChunkAt(Duration position) async {
+    if (_audioFileHandle == null) return;
+    
+    try {
+      // 16kHz, 16bit, Mono WAV
+      // Header is 44 bytes
+      // Sample size is 2 bytes
+      // Position in samples = position.inSeconds * 16000
+      // Position in bytes = 44 + (samples * 2)
+      
+      const int sampleRate = 16000;
+      const int headerSize = 44;
+      final int startSample = (position.inMilliseconds * sampleRate / 1000).toInt();
+      final int startByte = headerSize + (startSample * 2);
+      
+      // Read inputSize samples (15600)
+      final int bytesToRead = AudioAnalysisService.inputSize * 2;
+      
+      await _audioFileHandle!.setPosition(startByte);
+      final Uint8List bytes = await _audioFileHandle!.read(bytesToRead);
+      
+      if (bytes.length < bytesToRead) return;
+      
+      // Convert bytes (Int16 LE) to List<double>
+      final List<double> samples = [];
+      final ByteData byteData = ByteData.sublistView(bytes);
+      for (int i = 0; i < bytes.length; i += 2) {
+        final int val = byteData.getInt16(i, Endian.little);
+        samples.add(val / 32767.0);
+      }
+      
+      _analysisService.analyze(samples);
+    } catch (e) {
+      // Silent fail for analysis
+    }
   }
 
   @override
   void onClose() {
     player.closePlayer();
     waveformController.dispose();
+    _audioFileHandle?.close();
+    _analysisService.topPredictions.clear();
     super.onClose();
   }
 
@@ -125,26 +185,17 @@ class DetailsController extends GetxController {
           await player.pausePlayer();
         }
         isPlaying.value = false;
-        // isPaused.value = true; // This line was not in the original file content
       } else {
         if (player.isPaused) {
-          if (player.isPaused) {
-            await player.resumePlayer();
-          } else {
-             // Fallback if state is desynced
-             await player.startPlayer(fromURI: localFilePath, codec: Codec.aacMP4);
-          }
+          await player.resumePlayer();
         } else {
           await player.startPlayer(fromURI: localFilePath, codec: Codec.aacMP4);
         }
         isPlaying.value = true;
-        // isPaused.value = false; // This line was not in the original file content
       }
     } catch (e) {
       Get.snackbar("Error", "Playback error: $e");
-      // Reset state on error
       isPlaying.value = false;
-      // isPaused.value = false; // This line was not in the original file content
     }
   }
 

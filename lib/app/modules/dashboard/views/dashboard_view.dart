@@ -25,7 +25,8 @@ class DashboardView extends GetView<DashboardController> {
         currentIndex: controller.tabIndex.value,
         onTap: controller.changeTabIndex,
         selectedItemColor: Colors.teal,
-        unselectedItemColor: Colors.grey,
+        unselectedItemColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey[400] : Colors.grey,
+        backgroundColor: Theme.of(context).bottomNavigationBarTheme.backgroundColor,
         showUnselectedLabels: true,
         type: BottomNavigationBarType.fixed,
         items: const [

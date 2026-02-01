@@ -197,40 +197,47 @@ class HomeController extends GetxController {
   }
 
   Future<void> _stopRecording() async {
+    // 1. Stop Timer immediately for UI responsiveness
+    _timer?.cancel();
+    _timer = null;
+    
     try {
+      // 2. Stop Capture
       await _audioCapture.stop();
-      _timer?.cancel();
-      
+    } catch (e) {
+      print("Warning: Audio capture stop error: $e");
+    }
+
+    try {
+      // 3. Finalize File
       if (_fileRaf != null) {
-        // Finalize WAV Header (using the same RAF)
         await _updateWavHeader();
         await _fileRaf!.close();
         _fileRaf = null;
       }
-      
-      isRecording.value = false;
-      
-      // Check for Speech
-      if (hasSpeechDetected) {
-        _showError('Recording Discarded: Speech detected (>70% confidence).', isInfo: true);
-        reset(); // Discard
-        // Delete file
-        if (_currentFile != null && await _currentFile!.exists()) {
-          await _currentFile!.delete();
-        }
-        return;
-      }
-      
-      // Validation: Check duration
-      if (globalDuration.value.inSeconds < 15) {
-        _showError('Recording must be at least 15 seconds', isInfo: true);
-        // Let user review anyway for now, but in production we'd enforce.
-      }
-      
-      isCompletedRecording.value = true;
     } catch (e) {
-      print("Error stopping recorder: $e");
+      print("Warning: File close error: $e");
+      // Even if file fails, we must stop the recording state
     }
+      
+    isRecording.value = false;
+      
+    // Check for Speech
+    if (hasSpeechDetected) {
+      _showError('Recording Discarded: Speech detected (>70% confidence).', isInfo: true);
+      reset(); // Discard
+      if (_currentFile != null && await _currentFile!.exists()) {
+        await _currentFile!.delete();
+      }
+      return;
+    }
+      
+    // Validation: Check duration
+    if (globalDuration.value.inSeconds < 15) {
+      _showError('Recording must be at least 15 seconds', isInfo: true);
+    }
+      
+    isCompletedRecording.value = true;
   }
 
   Future<void> saveRecording() async {
@@ -262,8 +269,30 @@ class HomeController extends GetxController {
   }
 
   void discardRecording() async {
+    // If currently recording, stop everything first
+    if (isRecording.value) {
+      _timer?.cancel();
+      _timer = null;
+      try {
+        await _audioCapture.stop();
+      } catch (e) {
+        print("Error stopping capture during discard: $e");
+      }
+      try {
+        _fileRaf?.close(); // Close active file handle
+        _fileRaf = null;
+      } catch (e) {
+        print("Error closing file during discard: $e");
+      }
+      isRecording.value = false;
+    }
+
     if (_currentFile != null && await _currentFile!.exists()) {
-       await _currentFile!.delete();
+       try {
+         await _currentFile!.delete();
+       } catch (e) {
+         print("Error deleting discarded file: $e");
+       }
     }
     reset();
   }

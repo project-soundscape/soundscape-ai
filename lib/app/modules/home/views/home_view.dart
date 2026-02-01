@@ -10,16 +10,9 @@ class HomeView extends GetView<HomeController> {
   @override
   Widget build(BuildContext context) {
     final analysisService = Get.find<AudioAnalysisService>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('SoundScape'),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.teal[800],
-        elevation: 0,
-      ),
-      backgroundColor: Colors.grey[50],
       body: SafeArea(
         child: Center(
           child: Padding(
@@ -32,11 +25,11 @@ class HomeView extends GetView<HomeController> {
                 Obx(
                   () => Text(
                     '${controller.globalDuration.value.inMinutes.toString().padLeft(2, '0')} : ${(controller.globalDuration.value.inSeconds % 60).toString().padLeft(2, '0')}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 64,
                       fontWeight: FontWeight.w200,
-                      color: Colors.black87,
-                      fontFeatures: [FontFeature.tabularFigures()],
+                      color: Theme.of(context).textTheme.bodyLarge?.color,
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
                 ),
@@ -173,7 +166,7 @@ class HomeView extends GetView<HomeController> {
                                             style: TextStyle(
                                               fontSize: 12, 
                                               fontWeight: isWarning ? FontWeight.bold : FontWeight.normal,
-                                              color: isWarning ? Colors.red : Colors.black87
+                                              color: isWarning ? Colors.red : Theme.of(context).textTheme.bodyMedium?.color
                                             ),
                                             overflow: TextOverflow.ellipsis,
                                             textAlign: TextAlign.end,
@@ -190,7 +183,7 @@ class HomeView extends GetView<HomeController> {
                                                 borderRadius: BorderRadius.circular(4),
                                                 child: LinearProgressIndicator(
                                                   value: value,
-                                                  backgroundColor: Colors.grey[200],
+                                                  backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
                                                   color: color,
                                                   minHeight: 12,
                                                 ),

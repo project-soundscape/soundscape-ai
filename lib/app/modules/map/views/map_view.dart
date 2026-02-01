@@ -11,42 +11,63 @@ class MapView extends GetView<SoundMapController> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: SizedBox(
           height: 44,
           child: TextField(
+            controller: controller.textController,
             onChanged: controller.onSearchChanged,
             decoration: InputDecoration(
               filled: true,
-              fillColor: Colors.grey[100],
+              fillColor: isDark ? Colors.grey[800] : Colors.grey[100],
               hintText: 'Search map...',
-              hintStyle: TextStyle(color: Colors.grey[500]),
+              hintStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[500]),
               prefixIcon: const Icon(Icons.search, color: Colors.teal),
+              suffixIcon: Obx(() => controller.searchQuery.value.isNotEmpty
+                  ? IconButton(
+                      icon: Icon(Icons.close, size: 20, color: isDark ? Colors.grey[300] : Colors.grey),
+                      onPressed: controller.clearSearch,
+                    )
+                  : const SizedBox.shrink()),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
             ),
-            style: const TextStyle(fontSize: 16),
+            style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black),
             textAlignVertical: TextAlignVertical.center,
             cursorColor: Colors.teal,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? null : Colors.white,
         elevation: 0.5,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.tune, color: Colors.teal),
-            onPressed: () {
-              Get.snackbar(
-                'Filter',
-                'Filter options coming soon!',
-                snackPosition: SnackPosition.BOTTOM,
-                backgroundColor: Colors.teal.withValues(alpha: 0.1),
-              );
-            },
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.tune, color: Colors.teal),
+                onPressed: () => _showFilterModal(context),
+              ),
+              // Filter active indicator
+              Obx(() {
+                final isDefault = controller.filterOptions.value.status == 'All' && 
+                                  controller.filterOptions.value.minConfidence == 0.0 &&
+                                  controller.filterOptions.value.startDate == null;
+                return isDefault ? const SizedBox.shrink() : Positioned(
+                  right: 12,
+                  top: 12,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                  ),
+                );
+              }),
+            ],
           ),
           const SizedBox(width: 4),
         ],
@@ -61,7 +82,9 @@ class MapView extends GetView<SoundMapController> {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+                urlTemplate: isDark 
+                    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
+                    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
                 subdomains: const ['a', 'b', 'c'],
                 userAgentPackageName: 'com.soundscape.frontend',
                 tileProvider: CachedTileProvider(),
@@ -74,7 +97,7 @@ class MapView extends GetView<SoundMapController> {
                       color: Colors.blue.withValues(alpha: 0.1),
                       borderStrokeWidth: 1,
                       borderColor: Colors.blue.withValues(alpha: 0.5),
-                      radius: 10, // 10m radius
+                      radius: 10,
                       useRadiusInMeter: true,
                     ),
                 ],
@@ -90,7 +113,6 @@ class MapView extends GetView<SoundMapController> {
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          // Direction Arrow/Cone
                           Transform.rotate(
                             angle: (controller.currentHeading.value * (3.14159 / 180)),
                             child: CustomPaint(
@@ -98,7 +120,6 @@ class MapView extends GetView<SoundMapController> {
                               painter: DirectionPainter(),
                             ),
                           ),
-                          // Center Dot
                           Container(
                             width: 16,
                             height: 16,
@@ -121,7 +142,7 @@ class MapView extends GetView<SoundMapController> {
           
           // Navigation Controls
           Positioned(
-            bottom: 180,
+            bottom: controller.visibleRecordings.isEmpty ? 32 : 200,
             right: 16,
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -129,8 +150,8 @@ class MapView extends GetView<SoundMapController> {
                 FloatingActionButton(
                   heroTag: 'zoomIn',
                   mini: true,
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.teal[800],
+                  backgroundColor: isDark ? Colors.grey[800] : Colors.white,
+                  foregroundColor: Colors.teal,
                   onPressed: controller.zoomIn,
                   child: const Icon(Icons.add),
                 ),
@@ -138,8 +159,8 @@ class MapView extends GetView<SoundMapController> {
                 FloatingActionButton(
                   heroTag: 'zoomOut',
                   mini: true,
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.teal[800],
+                  backgroundColor: isDark ? Colors.grey[800] : Colors.white,
+                  foregroundColor: Colors.teal,
                   onPressed: controller.zoomOut,
                   child: const Icon(Icons.remove),
                 ),
@@ -155,43 +176,52 @@ class MapView extends GetView<SoundMapController> {
             ),
           ),
 
-          // Nearby Recordings List
+          // Nearby Recordings Carousel
           if (controller.visibleRecordings.isNotEmpty)
             Positioned(
-              bottom: 24,
+              bottom: 32,
               left: 0,
               right: 0,
-              height: 140,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+              height: 150,
+              child: PageView.builder(
+                controller: PageController(viewportFraction: 0.9),
                 itemCount: controller.visibleRecordings.length,
                 itemBuilder: (context, index) {
                   final rec = controller.visibleRecordings[index];
                   return Container(
-                    width: 300,
-                    margin: const EdgeInsets.only(right: 12),
-                    child: Card(
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.grey[900] : Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        )
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
                       child: InkWell(
-                        onTap: () {
-                          // Center map on item first? Or go to details?
-                          // Let's go to details as per likely intent.
-                          Get.toNamed(Routes.DETAILS, arguments: rec);
-                        },
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () => Get.toNamed(Routes.DETAILS, arguments: rec),
                         child: Padding(
-                          padding: const EdgeInsets.all(16.0),
+                          padding: const EdgeInsets.all(12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  CircleAvatar(
-                                    backgroundColor: Colors.teal.withValues(alpha: 0.1),
-                                    child: const Icon(Icons.music_note, color: Colors.teal),
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: Colors.teal.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Icon(Icons.graphic_eq, color: Colors.teal, size: 20),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
@@ -199,40 +229,65 @@ class MapView extends GetView<SoundMapController> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          rec.commonName ?? 'Unknown Sound',
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                          rec.commonName ?? 'Unidentified Sound',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: isDark ? Colors.white : Colors.black87,
+                                          ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
-                                        const SizedBox(height: 4),
+                                        const SizedBox(height: 2),
                                         Text(
-                                          DateFormat.yMMMd().format(rec.timestamp),
-                                          style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                          DateFormat('MMM d, h:mm a').format(rec.timestamp),
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
                                       ],
                                     ),
                                   ),
+                                  if (rec.confidence != null)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: Colors.green.withOpacity(0.3)),
+                                      ),
+                                      child: Text(
+                                        "${(rec.confidence! * 100).toInt()}%",
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark ? Colors.greenAccent : Colors.green.shade700,
+                                        ),
+                                      ),
+                                    ),
                                 ],
                               ),
-                              const SizedBox(height: 12),
+                              const Spacer(),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  if (rec.status == 'processed')
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                                      child: Text('Identified', style: TextStyle(color: Colors.green[800], fontSize: 10, fontWeight: FontWeight.bold)),
-                                    )
-                                  else
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                                      child: Text('Pending', style: TextStyle(color: Colors.orange[800], fontSize: 10, fontWeight: FontWeight.bold)),
+                                  _buildBadge(context, Icons.timer_outlined, "${rec.duration.inSeconds}s"),
+                                  const SizedBox(width: 12),
+                                  _buildBadge(context, Icons.location_on_outlined, "${rec.latitude?.toStringAsFixed(3)}, ${rec.longitude?.toStringAsFixed(3)}"),
+                                  const Spacer(),
+                                  Text(
+                                    "Details",
+                                    style: TextStyle(
+                                      color: isDark ? Colors.tealAccent : Colors.teal.shade700,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
                                     ),
-                                  const Icon(Icons.arrow_forward, size: 16, color: Colors.grey),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(Icons.arrow_forward_rounded, size: 14, color: isDark ? Colors.tealAccent : Colors.teal.shade700),
                                 ],
-                              )
+                              ),
                             ],
                           ),
                         ),
@@ -243,7 +298,6 @@ class MapView extends GetView<SoundMapController> {
               ),
             ),
 
-          // Loading Overlay
           if (controller.isLoading.value)
             Container(
               color: Colors.black12,
@@ -253,6 +307,138 @@ class MapView extends GetView<SoundMapController> {
             ),
         ],
       )),
+    );
+  }
+
+  void _showFilterModal(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      backgroundColor: isDark ? Colors.grey[900] : Colors.white,
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
+        child: Obx(() {
+          final filters = controller.filterOptions.value;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Filter Map', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+                  TextButton(
+                    onPressed: controller.resetFilters,
+                    child: const Text('Reset', style: TextStyle(color: Colors.red)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              
+              Text('Status', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isDark ? Colors.grey[400] : Colors.grey)),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                children: ['All', 'Processed', 'Pending', 'Uploaded'].map((status) {
+                  final isSelected = filters.status == status;
+                  return ChoiceChip(
+                    label: Text(status),
+                    selected: isSelected,
+                    selectedColor: Colors.teal.withOpacity(0.2),
+                    backgroundColor: isDark ? Colors.grey[800] : null,
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.teal : (isDark ? Colors.grey[300] : Colors.black87),
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
+                    ),
+                    onSelected: (_) => controller.updateFilterStatus(status),
+                  );
+                }).toList(),
+              ),
+              
+              const SizedBox(height: 24),
+              Text('Minimum Confidence', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isDark ? Colors.grey[400] : Colors.grey)),
+              Row(
+                children: [
+                  Expanded(
+                    child: Slider(
+                      value: filters.minConfidence,
+                      min: 0.0,
+                      max: 0.9,
+                      divisions: 9,
+                      label: "${(filters.minConfidence * 100).toInt()}%",
+                      activeColor: Colors.teal,
+                      onChanged: controller.updateMinConfidence,
+                    ),
+                  ),
+                  Text("${(filters.minConfidence * 100).toInt()}%+", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+                ],
+              ),
+              
+              const SizedBox(height: 24),
+              Text('Date Range', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isDark ? Colors.grey[400] : Colors.grey)),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final picked = await showDateRangePicker(
+                    context: context,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now(),
+                    initialDateRange: filters.startDate != null && filters.endDate != null 
+                        ? DateTimeRange(start: filters.startDate!, end: filters.endDate!) 
+                        : null,
+                    builder: (context, child) {
+                      return Theme(
+                        data: Theme.of(context).copyWith(
+                          colorScheme: isDark 
+                            ? const ColorScheme.dark(primary: Colors.teal, surface: Color(0xFF1E1E1E))
+                            : const ColorScheme.light(primary: Colors.teal),
+                        ),
+                        child: child!,
+                      );
+                    }
+                  );
+                  if (picked != null) {
+                    controller.updateDateRange(picked.start, picked.end);
+                  }
+                },
+                icon: Icon(Icons.calendar_today, size: 18, color: isDark ? Colors.white70 : Colors.black87),
+                label: Text(
+                  filters.startDate != null 
+                    ? "${DateFormat.MMMd().format(filters.startDate!)} - ${DateFormat.MMMd().format(filters.endDate!)}"
+                    : "Select Date Range",
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                  side: BorderSide(color: isDark ? Colors.grey[700]! : Colors.grey),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+  Widget _buildBadge(BuildContext context, IconData icon, String label) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[500]),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? Colors.grey[400] : Colors.grey[600],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 }

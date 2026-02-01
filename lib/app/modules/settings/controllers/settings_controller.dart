@@ -1,11 +1,19 @@
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../data/services/appwrite_service.dart';
+import '../../../data/services/storage_service.dart';
 import '../../../routes/app_pages.dart';
 
 class SettingsController extends GetxController {
   final _appwriteService = Get.find<AppwriteService>();
+  final _storageService = Get.find<StorageService>();
+  
   final appVersion = ''.obs;
+  
+  // UI State
+  final isDarkMode = false.obs;
+  final notificationsEnabled = true.obs;
 
   bool get isLoggedIn => _appwriteService.isLoggedIn.value;
   String get userName => _appwriteService.currentUser.value?.name ?? 'Anonymous';
@@ -15,6 +23,28 @@ class SettingsController extends GetxController {
   void onInit() {
     super.onInit();
     _loadAppVersion();
+    _loadSettings();
+  }
+
+  void _loadSettings() {
+    isDarkMode.value = _storageService.isDarkMode;
+    notificationsEnabled.value = _storageService.notificationsEnabled;
+    
+    // Apply theme after build frame to avoid "setState called during build" error
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Get.changeThemeMode(isDarkMode.value ? ThemeMode.dark : ThemeMode.light);
+    });
+  }
+
+  void toggleTheme(bool val) {
+    isDarkMode.value = val;
+    _storageService.isDarkMode = val;
+    Get.changeThemeMode(val ? ThemeMode.dark : ThemeMode.light);
+  }
+
+  void toggleNotifications(bool val) {
+    notificationsEnabled.value = val;
+    _storageService.notificationsEnabled = val;
   }
 
   Future<void> _loadAppVersion() async {
@@ -25,5 +55,24 @@ class SettingsController extends GetxController {
   Future<void> logout() async {
     await _appwriteService.logout();
     Get.offAllNamed(Routes.LOGIN);
+  }
+
+  Future<void> updateName(String name) async {
+    try {
+      await _appwriteService.updateName(name);
+      Get.snackbar('Success', 'Name updated successfully', backgroundColor: Colors.green, colorText: Colors.white);
+    } catch (e) {
+      Get.snackbar('Error', e.toString().replaceAll('Exception: ', ''), backgroundColor: Colors.red, colorText: Colors.white);
+    }
+  }
+
+  Future<void> updatePassword(String newPassword, String oldPassword) async {
+    try {
+      await _appwriteService.updatePassword(newPassword, oldPassword);
+      Get.snackbar('Success', 'Password updated successfully', backgroundColor: Colors.green, colorText: Colors.white);
+      Get.back(); // Close dialog or page
+    } catch (e) {
+      Get.snackbar('Error', e.toString().replaceAll('Exception: ', ''), backgroundColor: Colors.red, colorText: Colors.white);
+    }
   }
 }
