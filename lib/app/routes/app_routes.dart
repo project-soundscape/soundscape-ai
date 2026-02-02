@@ -9,6 +9,8 @@ abstract class Routes {
   static const LOGIN = _Paths.LOGIN;
   static const SIGNUP = _Paths.SIGNUP;
   static const SPLASH = _Paths.SPLASH;
+  static const YAMNET_CHECKER = _Paths.YAMNET_CHECKER;
+  static const NOISE_MONITOR = _Paths.NOISE_MONITOR;
 }
 
 abstract class _Paths {
@@ -19,4 +21,6 @@ abstract class _Paths {
   static const LOGIN = '/login';
   static const SIGNUP = '/signup';
   static const SPLASH = '/splash';
+  static const YAMNET_CHECKER = '/yamnet-checker';
+  static const NOISE_MONITOR = '/noise-monitor';
 }

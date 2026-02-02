@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import '../../../data/services/sync_service.dart';
 import '../controllers/library_controller.dart';
 import '../../../routes/app_pages.dart';
 
@@ -19,6 +20,16 @@ class LibraryView extends GetView<LibraryController> {
             pinned: true,
             expandedHeight: 120.0,
             backgroundColor: Colors.teal,
+            actions: [
+              IconButton(
+                onPressed: () {
+                  Get.find<SyncService>().syncNow();
+                  controller.loadRecordings();
+                },
+                icon: const Icon(Icons.sync, color: Colors.white),
+                tooltip: 'Sync now',
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               title: const Text('Sound Library', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
               centerTitle: false,
@@ -152,14 +163,34 @@ class LibraryView extends GetView<LibraryController> {
                                 ),
                                 child: ListTile(
                                   contentPadding: const EdgeInsets.all(16),
-                                  leading: Container(
-                                    width: 50,
-                                    height: 50,
-                                    decoration: BoxDecoration(
-                                      color: Colors.teal.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Icon(Icons.music_note_rounded, color: Colors.teal, size: 28),
+                                  leading: Stack(
+                                    children: [
+                                      Container(
+                                        width: 50,
+                                        height: 50,
+                                        decoration: BoxDecoration(
+                                          color: Colors.teal.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: const Icon(Icons.music_note_rounded, color: Colors.teal, size: 28),
+                                      ),
+                                      Positioned(
+                                        right: -2,
+                                        bottom: -2,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(2),
+                                          decoration: BoxDecoration(
+                                            color: isDark ? Colors.grey[900] : Colors.white,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            recording.isLocal ? Icons.offline_pin_rounded : Icons.cloud_outlined,
+                                            size: 14,
+                                            color: recording.isLocal ? Colors.teal : Colors.grey,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   title: Text(
                                     recording.commonName ?? 'Unidentified Sound',

@@ -11,6 +11,10 @@ import '../modules/auth/views/login_view.dart';
 import '../modules/auth/views/signup_view.dart';
 import '../modules/splash/bindings/splash_binding.dart';
 import '../modules/splash/views/splash_view.dart';
+import '../modules/yamnet_checker/bindings/yamnet_checker_binding.dart';
+import '../modules/yamnet_checker/views/yamnet_checker_view.dart';
+import '../modules/noise_monitor/bindings/noise_monitor_binding.dart';
+import '../modules/noise_monitor/views/noise_monitor_view.dart';
 
 part 'app_routes.dart';
 
@@ -49,6 +53,16 @@ class AppPages {
       name: _Paths.SPLASH,
       page: () => const SplashView(),
       binding: SplashBinding(),
+    ),
+    GetPage(
+      name: _Paths.YAMNET_CHECKER,
+      page: () => const YamnetCheckerView(),
+      binding: YamnetCheckerBinding(),
+    ),
+    GetPage(
+      name: _Paths.NOISE_MONITOR,
+      page: () => const NoiseMonitorView(),
+      binding: NoiseMonitorBinding(),
     ),
   ];
 }

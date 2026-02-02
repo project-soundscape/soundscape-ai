@@ -4,7 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
 import '../../../routes/app_pages.dart';
 import '../controllers/map_controller.dart';
-import '../providers/cached_tile_provider.dart';
+import '../providers/persistent_tile_provider.dart';
 
 class MapView extends GetView<SoundMapController> {
   const MapView({super.key});
@@ -87,7 +87,7 @@ class MapView extends GetView<SoundMapController> {
                     : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
                 subdomains: const ['a', 'b', 'c'],
                 userAgentPackageName: 'com.soundscape.frontend',
-                tileProvider: CachedTileProvider(),
+                tileProvider: PersistentTileProvider(),
               ),
               CircleLayer(
                 circles: [

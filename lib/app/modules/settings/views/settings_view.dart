@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../routes/app_pages.dart';
 import '../controllers/settings_controller.dart';
 
 import 'edit_profile_view.dart';
@@ -81,6 +82,13 @@ class SettingsView extends GetView<SettingsController> {
                       controller.notificationsEnabled,
                       (val) => controller.toggleNotifications(val),
                     ),
+                    _buildDivider(isDark),
+                    _buildSwitchTile(
+                      'Recording Tips',
+                      Icons.help_outline,
+                      controller.showRecordingInstructions,
+                      (val) => controller.toggleRecordingInstructions(val),
+                    ),
                   ]),
                   const SizedBox(height: 24),
                   _buildSectionTitle('Account'),
@@ -96,6 +104,21 @@ class SettingsView extends GetView<SettingsController> {
                       Icons.logout,
                       () => _showLogoutDialog(context),
                       isDestructive: true,
+                    ),
+                  ]),
+                  const SizedBox(height: 24),
+                  _buildSectionTitle('Diagnostics'),
+                  _buildSettingsCard(context, [
+                    _buildActionTile(
+                      'YAMNet Checker',
+                      Icons.analytics_outlined,
+                      () => Get.toNamed(Routes.YAMNET_CHECKER),
+                    ),
+                    _buildDivider(isDark),
+                    _buildActionTile(
+                      'Noise Monitor',
+                      Icons.volume_up_outlined,
+                      () => Get.toNamed(Routes.NOISE_MONITOR),
                     ),
                   ]),
                   const SizedBox(height: 24),

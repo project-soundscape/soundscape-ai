@@ -4,14 +4,22 @@ import 'package:get/get.dart';
 
 import 'app/data/services/appwrite_service.dart';
 import 'app/data/services/location_service.dart';
+import 'app/data/services/noise_service.dart';
+import 'app/data/services/notification_service.dart';
 import 'app/data/services/storage_service.dart';
+import 'app/data/services/sync_service.dart';
+import 'app/data/services/wiki_service.dart';
 import 'app/routes/app_pages.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Get.putAsync(() => StorageService().init());
   await Get.putAsync(() => AppwriteService().init());
+  await Get.putAsync(() => WikiService().init());
+  await Get.putAsync(() => NotificationService().init());
   Get.put(LocationService());
+  Get.put(NoiseService());
+  await Get.putAsync(() => SyncService().init());
 
   runApp(
     GetMaterialApp(

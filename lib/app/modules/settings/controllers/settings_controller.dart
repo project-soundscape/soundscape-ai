@@ -14,6 +14,7 @@ class SettingsController extends GetxController {
   // UI State
   final isDarkMode = false.obs;
   final notificationsEnabled = true.obs;
+  final showRecordingInstructions = true.obs;
 
   bool get isLoggedIn => _appwriteService.isLoggedIn.value;
   String get userName => _appwriteService.currentUser.value?.name ?? 'Anonymous';
@@ -29,6 +30,7 @@ class SettingsController extends GetxController {
   void _loadSettings() {
     isDarkMode.value = _storageService.isDarkMode;
     notificationsEnabled.value = _storageService.notificationsEnabled;
+    showRecordingInstructions.value = _storageService.showRecordingInstructions;
     
     // Apply theme after build frame to avoid "setState called during build" error
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -45,6 +47,11 @@ class SettingsController extends GetxController {
   void toggleNotifications(bool val) {
     notificationsEnabled.value = val;
     _storageService.notificationsEnabled = val;
+  }
+
+  void toggleRecordingInstructions(bool val) {
+    showRecordingInstructions.value = val;
+    _storageService.showRecordingInstructions = val;
   }
 
   Future<void> _loadAppVersion() async {

@@ -36,6 +36,7 @@ class HomeController extends GetxController {
   RxBool isCompletedRecording = false.obs;
   RxBool isLoading = false.obs;
 
+  final nearbyRecordings = <Recording>[].obs;
   Rx<Duration> globalDuration = Duration.zero.obs;
   Duration? totalDuration;
   String recordedFilePath = '';
@@ -79,14 +80,118 @@ class HomeController extends GetxController {
   
   void _preFetchLocation() async {
      _recordingLocation = await _locationService.getLastKnownLocation();
+     _updateNearbyRecordings();
+     
+     // Listen for location changes to update nearby list
+     _locationService.getPositionStream().listen((pos) {
+       _recordingLocation = pos;
+       _updateNearbyRecordings();
+     });
+  }
+
+  void _updateNearbyRecordings() {
+    final pos = _recordingLocation;
+    if (pos == null) return;
+    
+    final all = _storageService.getRecordings();
+    if (all.isEmpty) return;
+
+    all.sort((a, b) {
+      if (a.latitude == null || a.longitude == null) return 1;
+      if (b.latitude == null || b.longitude == null) return -1;
+      
+      final distA = Geolocator.distanceBetween(pos.latitude, pos.longitude, a.latitude!, a.longitude!);
+      final distB = Geolocator.distanceBetween(pos.latitude, pos.longitude, b.latitude!, b.longitude!);
+      return distA.compareTo(distB);
+    });
+    
+    nearbyRecordings.assignAll(all.take(5));
   }
 
   Future<void> toggleRecording() async {
     if (isRecording.value) {
       await _stopRecording();
     } else {
-      await _startRecording();
+      if (_storageService.showRecordingInstructions) {
+        _showInstructionsDialog();
+      } else {
+        await _startRecording();
+      }
     }
+  }
+
+  void _showInstructionsDialog() {
+    bool dontShowAgain = false;
+    Get.dialog(
+      AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.teal),
+            SizedBox(width: 12),
+            Text('Recording Tips'),
+          ],
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildInstructionItem(Icons.timer, 'Minimum 15 seconds required for analysis.'),
+            _buildInstructionItem(Icons.do_not_disturb_on, 'Avoid human speech to ensure privacy.'),
+            _buildInstructionItem(Icons.stay_primary_portrait, 'Keep your device steady while recording.'),
+            _buildInstructionItem(Icons.nature, 'Point the microphone towards the sound source.'),
+            const SizedBox(height: 16),
+            StatefulBuilder(
+              builder: (context, setState) => CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: dontShowAgain,
+                title: const Text("Don't show again", style: TextStyle(fontSize: 14)),
+                controlAffinity: ListTileControlAffinity.leading,
+                activeColor: Colors.teal,
+                onChanged: (val) {
+                  setState(() => dontShowAgain = val ?? false);
+                },
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (dontShowAgain) {
+                _storageService.showRecordingInstructions = false;
+              }
+              Get.back();
+              _startRecording();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Start Recording'),
+          ),
+        ],
+      ),
+      barrierDismissible: false,
+    );
+  }
+
+  Widget _buildInstructionItem(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Colors.teal.withOpacity(0.7)),
+          const SizedBox(width: 12),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 14))),
+        ],
+      ),
+    );
   }
 
   Future<void> _startRecording() async {
@@ -258,6 +363,7 @@ class HomeController extends GetxController {
 
     await _storageService.saveRecording(recording);
     _appwriteService.uploadRecording(recording);
+    _updateNearbyRecordings();
     
     isLoading.value = false;
     if (Get.context != null) {

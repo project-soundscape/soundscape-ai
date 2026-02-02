@@ -5,18 +5,21 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../data/models/recording_model.dart';
 import '../../../data/services/storage_service.dart';
 import '../../../data/services/location_service.dart';
 import '../../../data/services/wiki_service.dart';
+import '../../../data/services/notification_service.dart';
 import '../../../routes/app_pages.dart';
 
 class SoundMapController extends GetxController {
   final StorageService _storageService = Get.find<StorageService>();
   final LocationService _locationService = Get.find<LocationService>();
   final WikiService _wikiService = Get.put(WikiService());
+  final NotificationService _notificationService = Get.find<NotificationService>();
   
   final markers = <Marker>[].obs;
   final visibleRecordings = <Recording>[].obs;
@@ -38,6 +41,7 @@ class SoundMapController extends GetxController {
   void onInit() {
     super.onInit();
     _determineInitialPosition();
+    _notificationService.requestPermissions();
     
     // Listen to changes
     ever(_storageService.recordings, (_) => loadMarkers());

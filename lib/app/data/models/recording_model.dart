@@ -2,7 +2,7 @@ import 'dart:convert';
 
 class Recording {
   final String id;
-  final String path;
+  String path;
   final double? latitude;
   final double? longitude;
   final DateTime timestamp;
@@ -68,4 +68,6 @@ class Recording {
   String toJson() => json.encode(toMap());
 
   factory Recording.fromJson(String source) => Recording.fromMap(json.decode(source));
+
+  bool get isLocal => !path.startsWith('http');
 }

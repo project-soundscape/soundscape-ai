@@ -22,6 +22,9 @@ class StorageService extends GetxService {
   bool get notificationsEnabled => _settingsBox.get('notificationsEnabled', defaultValue: true);
   set notificationsEnabled(bool val) => _settingsBox.put('notificationsEnabled', val);
 
+  bool get showRecordingInstructions => _settingsBox.get('showRecordingInstructions', defaultValue: true);
+  set showRecordingInstructions(bool val) => _settingsBox.put('showRecordingInstructions', val);
+
   void _loadRecordings() {
     recordings.assignAll(
       _box.values.map((e) => Recording.fromMap(Map<String, dynamic>.from(e))).toList()

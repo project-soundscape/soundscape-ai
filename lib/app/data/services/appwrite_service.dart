@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../models/recording_model.dart';
 import 'storage_service.dart';
+import 'notification_service.dart';
 
 class AppwriteService extends GetxService {
   late Client client;
@@ -446,6 +447,14 @@ class AppwriteService extends GetxService {
           
           await Get.find<StorageService>().updateRecording(recording);
           
+          // Show local notification
+          Get.find<NotificationService>().showNotification(
+            id: recording.id.hashCode,
+            title: 'Analysis Complete',
+            body: 'Identified: ${recording.commonName}',
+            payload: recording.id,
+          );
+          
           if(Get.context != null) {
              ScaffoldMessenger.of(Get.context!).showSnackBar(
                SnackBar(
@@ -544,18 +553,33 @@ class AppwriteService extends GetxService {
       }
       final fileId = segments[filesIndex + 1];
 
+      // Prepare persistent cache directory
+      final appDir = await getApplicationDocumentsDirectory();
+      final cacheDir = Directory('${appDir.path}/recordings_cache');
+      if (!await cacheDir.exists()) {
+        await cacheDir.create(recursive: true);
+      }
+
+      final cacheFile = File('${cacheDir.path}/$fileId.wav');
+      
+      // If already cached, just return the path
+      if (await cacheFile.exists()) {
+        print("Appwrite: Loading from persistent cache: ${cacheFile.path}");
+        return cacheFile.path;
+      }
+
       // Download bytes
+      print("Appwrite: Downloading recording for offline use...");
       final bytes = await storage.getFileDownload(
         bucketId: bucketId,
         fileId: fileId,
       );
 
-      // Save to temp file
-      final tempDir = await getTemporaryDirectory();
-      final tempFile = File('${tempDir.path}/$fileId.aac');
-      await tempFile.writeAsBytes(bytes);
+      // Save to persistent file
+      await cacheFile.writeAsBytes(bytes);
+      print("Appwrite: Saved to persistent cache: ${cacheFile.path}");
       
-      return tempFile.path;
+      return cacheFile.path;
     } catch (e) {
       print("Error downloading file: $e");
       rethrow;

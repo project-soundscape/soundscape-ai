@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../data/models/recording_model.dart';
 import '../../../data/services/appwrite_service.dart';
+import '../../../data/services/storage_service.dart';
 import '../../../data/services/wiki_service.dart';
 import '../../../data/services/audio_analysis_service.dart';
 
@@ -24,6 +25,7 @@ class DetailsController extends GetxController {
   RxBool isPlaying = false.obs;
   Rx<Duration> currentPosition = Duration.zero.obs;
   Rx<Duration> totalDuration = Duration.zero.obs;
+  Rx<Duration> remainingTime = Duration.zero.obs;
   RxBool isUploading = false.obs;
   
   String? localFilePath;
@@ -71,6 +73,13 @@ class DetailsController extends GetxController {
     if (recording.path.startsWith('http')) {
       try {
         localFilePath = await _appwriteService.downloadRecordingFile(recording.path);
+        
+        // Save the local path back to the recording object and update storage
+        // This makes it available offline immediately for next time
+        if (localFilePath != null) {
+          recording.path = localFilePath!;
+          Get.find<StorageService>().updateRecording(recording);
+        }
       } catch (e) {
         print("Error downloading file: $e");
         Get.snackbar("Error", "Could not load audio file");
@@ -120,27 +129,36 @@ class DetailsController extends GetxController {
     player.onProgress?.listen((e) {
       currentPosition.value = e.position;
       totalDuration.value = e.duration;
+      remainingTime.value = e.duration - e.position;
       
       // Perform YAMNet analysis during playback
       _analyzeChunkAt(e.position);
 
       if (e.position >= e.duration) {
-        isPlaying.value = false;
-        currentPosition.value = Duration.zero;
-        _analysisService.topPredictions.clear();
+        stopPlayer();
       }
     });
   }
 
+  Future<void> stopPlayer() async {
+    await player.stopPlayer();
+    isPlaying.value = false;
+    currentPosition.value = Duration.zero;
+    remainingTime.value = totalDuration.value;
+    _analysisService.topPredictions.clear();
+  }
+
   Future<void> _analyzeChunkAt(Duration position) async {
     if (_audioFileHandle == null) return;
+    if (!_analysisService.isReady) {
+      print("Details: Analysis service not ready yet");
+      return;
+    }
     
     try {
       // 16kHz, 16bit, Mono WAV
       // Header is 44 bytes
       // Sample size is 2 bytes
-      // Position in samples = position.inSeconds * 16000
-      // Position in bytes = 44 + (samples * 2)
       
       const int sampleRate = 16000;
       const int headerSize = 44;
@@ -150,10 +168,19 @@ class DetailsController extends GetxController {
       // Read inputSize samples (15600)
       final int bytesToRead = AudioAnalysisService.inputSize * 2;
       
+      final int fileLength = await _audioFileHandle!.length();
+      if (startByte + bytesToRead > fileLength) {
+        // If we are at the end of the file, read whatever is left or just return
+        return;
+      }
+
       await _audioFileHandle!.setPosition(startByte);
       final Uint8List bytes = await _audioFileHandle!.read(bytesToRead);
       
-      if (bytes.length < bytesToRead) return;
+      if (bytes.length < bytesToRead) {
+        print("Details: Could not read full chunk (${bytes.length}/$bytesToRead)");
+        return;
+      }
       
       // Convert bytes (Int16 LE) to List<double>
       final List<double> samples = [];
@@ -163,9 +190,10 @@ class DetailsController extends GetxController {
         samples.add(val / 32767.0);
       }
       
+      print("Details: Analyzing chunk at ${position.inMilliseconds}ms");
       _analysisService.analyze(samples);
     } catch (e) {
-      // Silent fail for analysis
+      print("Details: Chunk analysis error: $e");
     }
   }
 
@@ -189,7 +217,8 @@ class DetailsController extends GetxController {
         if (player.isPaused) {
           await player.resumePlayer();
         } else {
-          await player.startPlayer(fromURI: localFilePath, codec: Codec.aacMP4);
+          // Use default codec detection instead of forcing aacMP4
+          await player.startPlayer(fromURI: localFilePath);
         }
         isPlaying.value = true;
       }

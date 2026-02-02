@@ -1,13 +1,26 @@
 import 'package:get/get.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 class WikiService extends GetConnect {
-  static final Map<String, String?> _imageCache = {};
+  late Box _cacheBox;
+
+  Future<WikiService> init() async {
+    _cacheBox = await Hive.openBox('wiki_cache');
+    return this;
+  }
 
   Future<Map<String, dynamic>?> getBirdInfo(String scientificName) async {
-    // Clean and encode the scientific name for the URL
-    // Wikipedia expects spaces to be underscores for the page title in REST API, 
-    // or just properly encoded.
     final pageTitle = scientificName.trim().replaceAll(' ', '_');
+    
+    // 1. Check Local Cache
+    if (_cacheBox.containsKey(pageTitle)) {
+      final cachedData = _cacheBox.get(pageTitle);
+      if (cachedData != null) {
+        return Map<String, dynamic>.from(cachedData);
+      }
+    }
+
+    // 2. Fetch Remote
     final url = 'https://en.wikipedia.org/api/rest_v1/page/summary/$pageTitle';
 
     try {
@@ -20,23 +33,22 @@ class WikiService extends GetConnect {
 
       if (response.body == null) return null;
 
-      // Check if it's a disambiguation page or not found
       if (response.body['type'] == 'disambiguation') {
          return null; 
       }
 
-      final imageUrl = response.body['thumbnail']?['source'];
-      if (imageUrl != null) {
-        _imageCache[scientificName] = imageUrl;
-      }
-
-      return {
+      final data = {
         'title': response.body['title'],
         'description': response.body['extract'],
-        'imageUrl': imageUrl,
+        'imageUrl': response.body['thumbnail']?['source'],
         'originalImageUrl': response.body['originalimage']?['source'],
         'pageUrl': response.body['content_urls']?['desktop']?['page'],
       };
+
+      // 3. Save to Cache
+      await _cacheBox.put(pageTitle, data);
+
+      return data;
     } catch (e) {
       print('WikiService Exception: $e');
       return null;
@@ -44,11 +56,6 @@ class WikiService extends GetConnect {
   }
 
   Future<String?> getBirdImage(String scientificName) async {
-    if (_imageCache.containsKey(scientificName)) {
-      return _imageCache[scientificName];
-    }
-    
-    // We can just call getBirdInfo, it caches the image as a side effect
     final info = await getBirdInfo(scientificName);
     return info?['imageUrl'];
   }
