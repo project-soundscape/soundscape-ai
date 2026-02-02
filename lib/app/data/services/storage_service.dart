@@ -28,6 +28,9 @@ class StorageService extends GetxService {
   bool get useAdvancedModel => _settingsBox.get('useAdvancedModel', defaultValue: false);
   set useAdvancedModel(bool val) => _settingsBox.put('useAdvancedModel', val);
 
+  String get activeModelId => _settingsBox.get('activeModelId', defaultValue: 'yamnet');
+  set activeModelId(String val) => _settingsBox.put('activeModelId', val);
+
   void _loadRecordings() {
     recordings.assignAll(
       _box.values.map((e) => Recording.fromMap(Map<String, dynamic>.from(e))).toList()

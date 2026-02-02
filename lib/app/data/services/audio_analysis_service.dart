@@ -10,6 +10,7 @@ class AudioAnalysisService extends GetxService {
   final StorageService _storage = Get.find<StorageService>();
   
   Interpreter? _interpreter;
+  Interpreter? _yamnetSpeechInterpreter; // Dedicated for speech detection
   List<String> _labels = [];
   
   // Model Config
@@ -37,7 +38,17 @@ class AudioAnalysisService extends GetxService {
   @override
   void onInit() {
     super.onInit();
+    _loadSpeechDetector();
     _loadActiveModel();
+  }
+
+  Future<void> _loadSpeechDetector() async {
+    try {
+      print("AudioAnalysis: Loading YAMNet for speech detection...");
+      _yamnetSpeechInterpreter = await Interpreter.fromAsset('assets/tflite/yamnet.tflite');
+    } catch (e) {
+      print("AudioAnalysis: Speech detector load error: $e");
+    }
   }
 
   Future<void> reloadModel() async {
@@ -47,10 +58,11 @@ class AudioAnalysisService extends GetxService {
   Future<void> _loadActiveModel() async {
     isModelLoading.value = true;
     try {
-      if (_storage.useAdvancedModel) {
-        await _loadBirdNetModel();
-      } else {
+      final modelId = _storage.activeModelId;
+      if (modelId == 'yamnet') {
         await _loadYamnetModel();
+      } else {
+        await _loadExternalModel(modelId);
       }
     } finally {
       isModelLoading.value = false;
@@ -75,30 +87,39 @@ class AudioAnalysisService extends GetxService {
     }
   }
 
-  Future<void> _loadBirdNetModel() async {
+  Future<void> _loadExternalModel(String id) async {
     try {
       final appDir = await getApplicationDocumentsDirectory();
-      final modelFile = File('${appDir.path}/models/birdnet.tflite');
+      final modelFile = File('${appDir.path}/models/$id.tflite');
+      final labelsFile = File('${appDir.path}/models/${id}_labels.txt');
       
       if (!await modelFile.exists()) {
-        print("AudioAnalysis: BirdNET model file not found. Falling back to YAMNet.");
-        _storage.useAdvancedModel = false;
+        print("AudioAnalysis: Model $id not found locally. Falling back.");
+        _storage.activeModelId = 'yamnet';
         return _loadYamnetModel();
       }
 
-      print("AudioAnalysis: Loading BirdNET model from ${modelFile.path}...");
+      print("AudioAnalysis: Loading external model $id...");
       _interpreter = Interpreter.fromFile(modelFile);
       
-      currentSampleRate = birdnetSampleRate;
-      currentInputSize = birdnetInputSize;
-      isPerch = true; // Still using this flag for 'advanced model' logic
+      // Auto-detect config from tensor
+      final inputTensor = _interpreter!.getInputTensor(0);
+      currentInputSize = inputTensor.shape.last;
+      
+      // BirdNET variants typically use 48kHz, others might use 16kHz
+      currentSampleRate = id.contains('birdnet') ? 48000 : 16000;
+      isPerch = id.contains('birdnet'); 
 
-      await _loadBirdNetLabels();
+      if (await labelsFile.exists()) {
+        final lines = await labelsFile.readAsLines();
+        _labels = lines.map((l) => l.contains('_') ? l.split('_').last.trim() : l.trim()).toList();
+      }
+      
       numClasses = _labels.length;
-      print("AudioAnalysis: BirdNET Ready. Classes: $numClasses");
+      print("AudioAnalysis: External Model $id Ready. Classes: $numClasses");
     } catch (e) {
-      print("AudioAnalysis: Error loading BirdNET: $e. Falling back.");
-      _storage.useAdvancedModel = false;
+      print("AudioAnalysis: Error loading $id: $e. Falling back.");
+      _storage.activeModelId = 'yamnet';
       await _loadYamnetModel();
     }
   }
@@ -121,40 +142,37 @@ class AudioAnalysisService extends GetxService {
     }
   }
 
-  Future<void> _loadBirdNetLabels() async {
-    try {
-      final appDir = await getApplicationDocumentsDirectory();
-      final labelsFile = File('${appDir.path}/models/birdnet_labels.txt');
-      if (await labelsFile.exists()) {
-        final lines = await labelsFile.readAsLines();
-        _labels = lines.map((l) {
-          // BirdNET-Analyzer v2.4 usually uses "Scientific Name_Common Name"
-          if (l.contains('_')) {
-            return l.split('_').last.trim();
-          }
-          // Some versions use "Scientific Name Common Name" (tab or multiple spaces)
-          return l.trim();
-        }).toList();
-      }
-    } catch (e) {
-      print("BirdNET Labels Error: $e");
-    }
-  }
-
   void analyze(List<double> buffer) {
     if (_interpreter == null || _labels.isEmpty) return;
     if (buffer.length < currentInputSize) return;
 
-    final input = Float32List.fromList(buffer.sublist(0, currentInputSize));
-    var output = List<double>.filled(numClasses, 0).reshape([1, numClasses]);
-    
     try {
+      // 1. Run Main Identification Model
+      final input = Float32List.fromList(buffer.sublist(0, currentInputSize)).reshape([1, currentInputSize]);
+      var output = List<double>.filled(numClasses, 0).reshape([1, numClasses]);
       _interpreter!.run(input, output);
       
-      if (!isPerch && _labels[0] == 'Speech') {
-         speechConfidence.value = output[0][0];
+      // 2. Run Background Speech Detection (Always YAMNet)
+      if (isPerch && _yamnetSpeechInterpreter != null) {
+        // Downsample from 48kHz to 16kHz (every 3rd sample)
+        final List<double> downsampled = [];
+        for (int i = 0; i < buffer.length && downsampled.length < yamnetInputSize; i += 3) {
+          downsampled.add(buffer[i]);
+        }
+        
+        if (downsampled.length == yamnetInputSize) {
+          final speechInput = Float32List.fromList(downsampled).reshape([1, yamnetInputSize]);
+          var speechOutput = List<double>.filled(521, 0).reshape([1, 521]);
+          _yamnetSpeechInterpreter!.run(speechInput, speechOutput);
+          // Label index 0 in YAMNet is 'Speech'
+          speechConfidence.value = speechOutput[0][0];
+        }
+      } else if (!isPerch) {
+        // Main model is already YAMNet
+        speechConfidence.value = output[0][0];
       }
       
+      // 3. Update Predictions
       List<MapEntry<int, double>> scores = [];
       for(int i=0; i<numClasses; i++) {
         scores.add(MapEntry(i, output[0][i]));

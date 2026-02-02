@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../routes/app_pages.dart';
+import '../../../data/services/model_download_service.dart';
 import '../controllers/settings_controller.dart';
 
 import 'edit_profile_view.dart';
@@ -93,43 +94,9 @@ class SettingsView extends GetView<SettingsController> {
                   const SizedBox(height: 24),
                   _buildSectionTitle('Intelligence'),
                   _buildSettingsCard(context, [
-                    _buildSwitchTile(
-                      'BirdNET-Lite ID',
-                      Icons.biotech_outlined,
-                      controller.useAdvancedModel,
-                      (val) => controller.toggleAdvancedModel(val),
-                    ),
-                    Obx(() {
-                      if (controller.isDownloading.value) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          child: Column(
-                            children: [
-                              LinearProgressIndicator(
-                                value: controller.downloadProgress.value,
-                                backgroundColor: Colors.grey[200],
-                                color: Colors.teal,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                controller.downloadStatus.value,
-                                style: const TextStyle(fontSize: 12, color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                      return const SizedBox.shrink();
-                    }),
-                    Obx(() => controller.isModelDownloaded.value 
-                      ? _buildActionTile(
-                          'Delete Acoustic Model',
-                          Icons.delete_sweep_outlined,
-                          () => controller.deleteAdvancedModel(),
-                          isDestructive: true,
-                        )
-                      : const SizedBox.shrink()
-                    ),
+                    _buildActiveModelTile(context),
+                    const Divider(height: 1),
+                    _buildModelList(context),
                   ]),
                   const SizedBox(height: 24),
                   _buildSectionTitle('Account'),
@@ -293,30 +260,125 @@ class SettingsView extends GetView<SettingsController> {
   }
 
   void _showLogoutDialog(BuildContext context) {
-    Get.dialog(
-      AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to log out of your account?'),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+    // ... (existing code)
+  }
+
+  Widget _buildActiveModelTile(BuildContext context) {
+    return Obx(() {
+      final activeId = controller.activeModelId.value;
+      final activeModel = activeId == 'yamnet' 
+          ? 'Standard (YAMNet)' 
+          : controller.availableModels.firstWhere((m) => m.id == activeId).name;
+          
+      return ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.teal.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
           ),
-          ElevatedButton(
-            onPressed: () {
-              Get.back();
-              controller.logout();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          child: const Icon(Icons.memory, color: Colors.teal),
+        ),
+        title: const Text('Active Engine', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
+        subtitle: Text(activeModel, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        trailing: const Icon(Icons.check_circle, color: Colors.teal, size: 20),
+      );
+    });
+  }
+
+  Widget _buildModelList(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      children: [
+        // Standard YAMNet (Built-in)
+        _buildModelItem(
+          context, 
+          'Standard Acoustic ID', 
+          'General sound classification (521 classes). Built-in.', 
+          'yamnet',
+          isBuiltIn: true
+        ),
+        // Marketplace Models
+        ...controller.availableModels.map((model) => _buildModelItem(
+          context, 
+          model.name, 
+          model.description, 
+          model.id
+        )),
+      ],
+    );
+  }
+
+  Widget _buildModelItem(BuildContext context, String name, String desc, String id, {bool isBuiltIn = false}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Obx(() {
+      final isDownloaded = controller.downloadedModels.contains(id) || isBuiltIn;
+      final isActive = controller.activeModelId.value == id;
+      final isDownloading = controller.isDownloading.value && controller.downloadingModelId.value == id;
+
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isActive ? Colors.teal.withOpacity(0.05) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(name, style: TextStyle(fontWeight: isActive ? FontWeight.bold : FontWeight.w500)),
+              subtitle: Text(desc, style: const TextStyle(fontSize: 12)),
+              trailing: _buildModelTrailing(id, isDownloaded, isActive, isDownloading),
+              onTap: isDownloaded ? () => controller.setActiveModel(id) : null,
             ),
-            child: const Text('Logout'),
+            if (isDownloading) ...[
+              const SizedBox(height: 8),
+              LinearProgressIndicator(
+                value: controller.downloadProgress.value,
+                backgroundColor: Colors.grey[200],
+                color: Colors.teal,
+                minHeight: 4,
+              ),
+              const SizedBox(height: 4),
+              Text(controller.downloadStatus.value, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+            ],
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _buildModelTrailing(String id, bool isDownloaded, bool isActive, bool isDownloading) {
+    if (isDownloading) return const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2));
+    
+    if (isActive) return const Icon(Icons.radio_button_checked, color: Colors.teal);
+    
+    if (isDownloaded) {
+      if (id == 'yamnet') return const Icon(Icons.radio_button_off, color: Colors.grey);
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
+            onPressed: () => controller.deleteAcousticModel(id),
           ),
+          const Icon(Icons.radio_button_off, color: Colors.grey),
         ],
+      );
+    }
+
+    return ElevatedButton(
+      onPressed: () => controller.setActiveModel(id),
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+        minimumSize: const Size(60, 30),
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
+      child: const Text('GET', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
     );
   }
 }

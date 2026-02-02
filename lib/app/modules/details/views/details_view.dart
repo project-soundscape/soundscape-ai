@@ -145,21 +145,94 @@ class DetailsView extends GetView<DetailsController> {
                               ),
                             ),
                           ),
-                          const Spacer(),
-                          OutlinedButton.icon(
-                            onPressed: controller.exportAudio,
-                            icon: const Icon(Icons.share),
-                            label: const Text('Export'),
-                          ),
-                        ],
-                      ),
+                           const Spacer(),
+                           OutlinedButton.icon(
+                             onPressed: controller.exportAudio,
+                             icon: const Icon(Icons.share),
+                             label: const Text('Export'),
+                           ),
+                           const SizedBox(width: 12),
+                           Obx(() => ElevatedButton.icon(
+                             onPressed: controller.isScanning.value ? null : controller.scanFullFile,
+                             icon: Icon(controller.isScanning.value ? Icons.hourglass_top : Icons.search),
+                             label: const Text('Deep Scan'),
+                             style: ElevatedButton.styleFrom(
+                               backgroundColor: Colors.orange[50],
+                               foregroundColor: Colors.orange[900],
+                               elevation: 0,
+                             ),
+                           )),
+                         ],
+                       )
                     ],
                   ),
                 ),
               ),
-
+              
               const SizedBox(height: 24),
 
+              // SCAN PROGRESS
+              Obx(() => controller.isScanning.value ? Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Deep Scanning clip...', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        Text('${(controller.scanProgress.value * 100).toInt()}%', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    LinearProgressIndicator(
+                      value: controller.scanProgress.value,
+                      backgroundColor: Colors.orange[50],
+                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.orange),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ],
+                ),
+              ) : const SizedBox.shrink()),
+
+              // SCAN RESULTS CARD
+              Obx(() {
+                if (controller.scanResults.isEmpty) return const SizedBox.shrink();
+                final results = controller.scanResults.entries.toList()
+                  ..sort((a, b) => b.value.compareTo(a.value));
+
+                return Card(
+                  elevation: 0,
+                  color: isDark ? Colors.grey[900] : Colors.orange[50]?.withOpacity(0.3),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: BorderSide(color: Colors.orange.withOpacity(0.2))),
+                  margin: const EdgeInsets.only(bottom: 24),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.auto_awesome, color: Colors.orange, size: 20),
+                            SizedBox(width: 12),
+                            Text('Deep Scan Findings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange)),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        ...results.take(10).map((e) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12.0),
+                          child: Row(
+                            children: [
+                              Expanded(child: Text(e.key, style: const TextStyle(fontWeight: FontWeight.w500))),
+                              Text('${(e.value * 100).toInt()}%', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+                            ],
+                          ),
+                        )),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              
               // YAMNet Analysis Card
               Obx(() {
                 final isPlaying = controller.isPlaying.value;

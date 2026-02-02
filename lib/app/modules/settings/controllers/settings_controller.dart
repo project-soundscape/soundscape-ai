@@ -19,8 +19,8 @@ class SettingsController extends GetxController {
   final isDarkMode = false.obs;
   final notificationsEnabled = true.obs;
   final showRecordingInstructions = true.obs;
-  final useAdvancedModel = false.obs;
-  final isModelDownloaded = false.obs;
+  final activeModelId = 'yamnet'.obs;
+  final downloadedModels = <String>{}.obs;
 
   bool get isLoggedIn => _appwriteService.isLoggedIn.value;
   String get userName => _appwriteService.currentUser.value?.name ?? 'Anonymous';
@@ -31,18 +31,22 @@ class SettingsController extends GetxController {
     super.onInit();
     _loadAppVersion();
     _loadSettings();
-    _checkModelStatus();
+    _checkAllModels();
   }
 
-  Future<void> _checkModelStatus() async {
-    isModelDownloaded.value = await _modelDownloadService.isModelDownloaded();
+  Future<void> _checkAllModels() async {
+    for (var model in _modelDownloadService.availableModels) {
+      if (await _modelDownloadService.isModelDownloaded(model.id)) {
+        downloadedModels.add(model.id);
+      }
+    }
   }
 
   void _loadSettings() {
     isDarkMode.value = _storageService.isDarkMode;
     notificationsEnabled.value = _storageService.notificationsEnabled;
     showRecordingInstructions.value = _storageService.showRecordingInstructions;
-    useAdvancedModel.value = _storageService.useAdvancedModel;
+    activeModelId.value = _storageService.activeModelId;
     
     // Apply theme after build frame to avoid "setState called during build" error
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -66,29 +70,40 @@ class SettingsController extends GetxController {
     _storageService.showRecordingInstructions = val;
   }
 
-  Future<void> toggleAdvancedModel(bool val) async {
-    if (val && !isModelDownloaded.value) {
-      await _modelDownloadService.downloadModel();
-      await _checkModelStatus();
-      if (!isModelDownloaded.value) return; 
+  Future<void> setActiveModel(String id) async {
+    if (id == 'yamnet') {
+      _storageService.activeModelId = 'yamnet';
+      activeModelId.value = 'yamnet';
+      await _analysisService.reloadModel();
+      return;
+    }
+
+    if (!downloadedModels.contains(id)) {
+      final model = _modelDownloadService.availableModels.firstWhere((m) => m.id == id);
+      await _modelDownloadService.downloadAcousticModel(model);
+      await _checkAllModels();
+      if (!downloadedModels.contains(id)) return; 
     }
     
-    useAdvancedModel.value = val;
-    _storageService.useAdvancedModel = val;
+    _storageService.activeModelId = id;
+    activeModelId.value = id;
     await _analysisService.reloadModel();
   }
 
-  Future<void> deleteAdvancedModel() async {
-    await _modelDownloadService.deleteModel();
-    isModelDownloaded.value = false;
-    useAdvancedModel.value = false;
+  Future<void> deleteAcousticModel(String id) async {
+    await _modelDownloadService.deleteModel(id);
+    downloadedModels.remove(id);
+    if (activeModelId.value == id) {
+      activeModelId.value = 'yamnet';
+    }
     await _analysisService.reloadModel();
   }
 
+  List<AcousticModel> get availableModels => _modelDownloadService.availableModels;
   RxDouble get downloadProgress => _modelDownloadService.downloadProgress;
   RxBool get isDownloading => _modelDownloadService.isDownloading;
   RxString get downloadStatus => _modelDownloadService.statusMessage;
-
+  RxString get downloadingModelId => _modelDownloadService.downloadingModelId;
 
   Future<void> _loadAppVersion() async {
     final info = await PackageInfo.fromPlatform();

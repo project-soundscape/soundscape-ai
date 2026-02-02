@@ -30,10 +30,14 @@ class DetailsController extends GetxController {
   
   String? localFilePath;
   RandomAccessFile? _audioFileHandle;
+  Duration _lastAnalysisTime = const Duration(seconds: -1);
   
   // Species Info
   final Rxn<Map<String, dynamic>> speciesData = Rxn();
   final RxBool isLoadingWiki = false.obs;
+  final RxBool isScanning = false.obs;
+  final RxDouble scanProgress = 0.0.obs;
+  final scanResults = <String, double>{}.obs;
 
   @override
   void onInit() {
@@ -145,17 +149,26 @@ class DetailsController extends GetxController {
     isPlaying.value = false;
     currentPosition.value = Duration.zero;
     remainingTime.value = totalDuration.value;
-    _analysisService.topPredictions.clear();
+    _lastAnalysisTime = const Duration(seconds: -1); // Reset throttle
+    // Note: topPredictions are intentionally NOT cleared here 
+    // so users can see the last analysis results.
   }
 
   Future<void> _analyzeChunkAt(Duration position) async {
     if (_audioFileHandle == null) return;
+    
+    // Throttle: Only analyze if we've moved at least 1 second since last analysis
+    final int diff = (position.inMilliseconds - _lastAnalysisTime.inMilliseconds).abs();
+    if (diff < 1000) return; 
+
     if (!_analysisService.isReady) {
       print("Details: Analysis service not ready yet");
       return;
     }
     
     try {
+      _lastAnalysisTime = position; // Update last analysis time
+      
       // Dynamic Sample Rate & Input Size
       final int sampleRate = _analysisService.currentSampleRate;
       const int headerSize = 44;
@@ -167,19 +180,14 @@ class DetailsController extends GetxController {
       
       final int fileLength = await _audioFileHandle!.length();
       if (startByte + bytesToRead > fileLength) {
-        // If we are at the end of the file, read whatever is left or just return
         return;
       }
 
       await _audioFileHandle!.setPosition(startByte);
       final Uint8List bytes = await _audioFileHandle!.read(bytesToRead);
       
-      if (bytes.length < bytesToRead) {
-        print("Details: Could not read full chunk (${bytes.length}/$bytesToRead)");
-        return;
-      }
+      if (bytes.length < bytesToRead) return;
       
-      // Convert bytes (Int16 LE) to List<double>
       final List<double> samples = [];
       final ByteData byteData = ByteData.sublistView(bytes);
       for (int i = 0; i < bytes.length; i += 2) {
@@ -187,10 +195,71 @@ class DetailsController extends GetxController {
         samples.add(val / 32767.0);
       }
       
-      print("Details: Analyzing chunk at ${position.inMilliseconds}ms using ${_analysisService.isPerch ? 'Perch' : 'YAMNet'}");
+      print("Details: Analyzing segment at ${position.inSeconds}s using ${_analysisService.isPerch ? 'BirdNET' : 'YAMNet'}");
       _analysisService.analyze(samples);
     } catch (e) {
       print("Details: Chunk analysis error: $e");
+    }
+  }
+
+  Future<void> scanFullFile() async {
+    if (_audioFileHandle == null || isScanning.value) return;
+    
+    isScanning.value = true;
+    scanProgress.value = 0.0;
+    scanResults.clear();
+    
+    try {
+      final int sampleRate = _analysisService.currentSampleRate;
+      final int inputSize = _analysisService.currentInputSize;
+      final int bytesPerWindow = inputSize * 2;
+      const int headerSize = 44;
+      
+      final int fileLength = await _audioFileHandle!.length();
+      final int dataLength = fileLength - headerSize;
+      final int totalSteps = (dataLength / bytesPerWindow).floor();
+      
+      if (totalSteps <= 0) {
+        Get.snackbar("Error", "Clip is too short for deep scanning");
+        return;
+      }
+
+      for (int i = 0; i < totalSteps; i++) {
+        final int startByte = headerSize + (i * bytesPerWindow);
+        await _audioFileHandle!.setPosition(startByte);
+        final Uint8List bytes = await _audioFileHandle!.read(bytesPerWindow);
+        
+        if (bytes.length < bytesPerWindow) break;
+        
+        final List<double> samples = [];
+        final ByteData byteData = ByteData.sublistView(bytes);
+        for (int j = 0; j < bytes.length; j += 2) {
+          samples.add(byteData.getInt16(j, Endian.little) / 32767.0);
+        }
+        
+        // Analyze manually to avoid clearing topPredictions
+        _analysisService.analyze(samples);
+        
+        // Aggregate highest scores
+        for (var entry in _analysisService.topPredictions) {
+          if (entry.value > (scanResults[entry.key] ?? 0)) {
+            scanResults[entry.key] = entry.value;
+          }
+        }
+        
+        scanProgress.value = (i + 1) / totalSteps;
+        // Small yield to keep UI responsive
+        await Future.delayed(const Duration(milliseconds: 10));
+      }
+      
+      Get.snackbar("Scan Complete", "Detected ${scanResults.length} unique sound classes.", 
+        backgroundColor: Colors.teal, colorText: Colors.white);
+        
+    } catch (e) {
+      print("Full Scan Error: $e");
+      Get.snackbar("Error", "Failed to complete acoustic scan.");
+    } finally {
+      isScanning.value = false;
     }
   }
 
