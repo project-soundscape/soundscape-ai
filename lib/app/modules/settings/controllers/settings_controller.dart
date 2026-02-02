@@ -42,7 +42,7 @@ class SettingsController extends GetxController {
     isDarkMode.value = _storageService.isDarkMode;
     notificationsEnabled.value = _storageService.notificationsEnabled;
     showRecordingInstructions.value = _storageService.showRecordingInstructions;
-    useAdvancedModel.value = _storageService.usePerchModel;
+    useAdvancedModel.value = _storageService.useAdvancedModel;
     
     // Apply theme after build frame to avoid "setState called during build" error
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -74,7 +74,7 @@ class SettingsController extends GetxController {
     }
     
     useAdvancedModel.value = val;
-    _storageService.usePerchModel = val;
+    _storageService.useAdvancedModel = val;
     await _analysisService.reloadModel();
   }
 

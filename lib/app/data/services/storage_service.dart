@@ -25,8 +25,8 @@ class StorageService extends GetxService {
   bool get showRecordingInstructions => _settingsBox.get('showRecordingInstructions', defaultValue: true);
   set showRecordingInstructions(bool val) => _settingsBox.put('showRecordingInstructions', val);
 
-  bool get usePerchModel => _settingsBox.get('usePerchModel', defaultValue: false);
-  set usePerchModel(bool val) => _settingsBox.put('usePerchModel', val);
+  bool get useAdvancedModel => _settingsBox.get('useAdvancedModel', defaultValue: false);
+  set useAdvancedModel(bool val) => _settingsBox.put('useAdvancedModel', val);
 
   void _loadRecordings() {
     recordings.assignAll(

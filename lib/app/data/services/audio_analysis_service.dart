@@ -47,7 +47,7 @@ class AudioAnalysisService extends GetxService {
   Future<void> _loadActiveModel() async {
     isModelLoading.value = true;
     try {
-      if (_storage.usePerchModel) {
+      if (_storage.useAdvancedModel) {
         await _loadBirdNetModel();
       } else {
         await _loadYamnetModel();
@@ -82,7 +82,7 @@ class AudioAnalysisService extends GetxService {
       
       if (!await modelFile.exists()) {
         print("AudioAnalysis: BirdNET model file not found. Falling back to YAMNet.");
-        _storage.usePerchModel = false;
+        _storage.useAdvancedModel = false;
         return _loadYamnetModel();
       }
 
@@ -98,7 +98,7 @@ class AudioAnalysisService extends GetxService {
       print("AudioAnalysis: BirdNET Ready. Classes: $numClasses");
     } catch (e) {
       print("AudioAnalysis: Error loading BirdNET: $e. Falling back.");
-      _storage.usePerchModel = false;
+      _storage.useAdvancedModel = false;
       await _loadYamnetModel();
     }
   }
@@ -127,7 +127,14 @@ class AudioAnalysisService extends GetxService {
       final labelsFile = File('${appDir.path}/models/birdnet_labels.txt');
       if (await labelsFile.exists()) {
         final lines = await labelsFile.readAsLines();
-        _labels = lines.map((l) => l.split('_').last.trim()).toList();
+        _labels = lines.map((l) {
+          // BirdNET-Analyzer v2.4 usually uses "Scientific Name_Common Name"
+          if (l.contains('_')) {
+            return l.split('_').last.trim();
+          }
+          // Some versions use "Scientific Name Common Name" (tab or multiple spaces)
+          return l.trim();
+        }).toList();
       }
     } catch (e) {
       print("BirdNET Labels Error: $e");
