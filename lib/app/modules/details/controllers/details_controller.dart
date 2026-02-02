@@ -156,17 +156,14 @@ class DetailsController extends GetxController {
     }
     
     try {
-      // 16kHz, 16bit, Mono WAV
-      // Header is 44 bytes
-      // Sample size is 2 bytes
-      
-      const int sampleRate = 16000;
+      // Dynamic Sample Rate & Input Size
+      final int sampleRate = _analysisService.currentSampleRate;
       const int headerSize = 44;
       final int startSample = (position.inMilliseconds * sampleRate / 1000).toInt();
       final int startByte = headerSize + (startSample * 2);
       
-      // Read inputSize samples (15600)
-      final int bytesToRead = AudioAnalysisService.inputSize * 2;
+      // Read currentInputSize samples
+      final int bytesToRead = _analysisService.currentInputSize * 2;
       
       final int fileLength = await _audioFileHandle!.length();
       if (startByte + bytesToRead > fileLength) {
@@ -190,7 +187,7 @@ class DetailsController extends GetxController {
         samples.add(val / 32767.0);
       }
       
-      print("Details: Analyzing chunk at ${position.inMilliseconds}ms");
+      print("Details: Analyzing chunk at ${position.inMilliseconds}ms using ${_analysisService.isPerch ? 'Perch' : 'YAMNet'}");
       _analysisService.analyze(samples);
     } catch (e) {
       print("Details: Chunk analysis error: $e");

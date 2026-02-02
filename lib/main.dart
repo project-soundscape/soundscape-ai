@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 
 import 'app/data/services/appwrite_service.dart';
 import 'app/data/services/location_service.dart';
+import 'app/data/services/model_download_service.dart';
 import 'app/data/services/noise_service.dart';
 import 'app/data/services/notification_service.dart';
 import 'app/data/services/storage_service.dart';
@@ -17,6 +18,7 @@ void main() async {
   await Get.putAsync(() => AppwriteService().init());
   await Get.putAsync(() => WikiService().init());
   await Get.putAsync(() => NotificationService().init());
+  Get.put(ModelDownloadService());
   Get.put(LocationService());
   Get.put(NoiseService());
   await Get.putAsync(() => SyncService().init());

@@ -91,6 +91,47 @@ class SettingsView extends GetView<SettingsController> {
                     ),
                   ]),
                   const SizedBox(height: 24),
+                  _buildSectionTitle('Intelligence'),
+                  _buildSettingsCard(context, [
+                    _buildSwitchTile(
+                      'BirdNET-Lite ID',
+                      Icons.biotech_outlined,
+                      controller.useAdvancedModel,
+                      (val) => controller.toggleAdvancedModel(val),
+                    ),
+                    Obx(() {
+                      if (controller.isDownloading.value) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Column(
+                            children: [
+                              LinearProgressIndicator(
+                                value: controller.downloadProgress.value,
+                                backgroundColor: Colors.grey[200],
+                                color: Colors.teal,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                controller.downloadStatus.value,
+                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    }),
+                    Obx(() => controller.isModelDownloaded.value 
+                      ? _buildActionTile(
+                          'Delete Acoustic Model',
+                          Icons.delete_sweep_outlined,
+                          () => controller.deleteAdvancedModel(),
+                          isDestructive: true,
+                        )
+                      : const SizedBox.shrink()
+                    ),
+                  ]),
+                  const SizedBox(height: 24),
                   _buildSectionTitle('Account'),
                   _buildSettingsCard(context, [
                     _buildActionTile(

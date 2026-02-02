@@ -161,12 +161,14 @@ class HomeController extends GetxController {
             child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (dontShowAgain) {
                 _storageService.showRecordingInstructions = false;
               }
+              // Use a small delay or ensure Get.back finishes before starting heavy async work
               Get.back();
-              _startRecording();
+              await Future.delayed(const Duration(milliseconds: 100));
+              await _startRecording();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.teal,
@@ -224,7 +226,7 @@ class HomeController extends GetxController {
       await _audioCapture.start(
         _onAudioData, 
         (err) => print("Capture Error: $err"), 
-        sampleRate: 16000, 
+        sampleRate: _analysisService.currentSampleRate, 
         bufferSize: 3000
       );
       
@@ -277,9 +279,9 @@ class HomeController extends GetxController {
          print("Audio Capture: Chunk #${_callbackCount} | Size: ${samples.length} | Max Amp: $maxAmp");
       }
       
-      // 1. Buffer for YAMNet
+      // 1. Buffer for YAMNet / Perch
       _audioBuffer.addAll(samples);
-      if (_audioBuffer.length >= AudioAnalysisService.inputSize) {
+      if (_audioBuffer.length >= _analysisService.currentInputSize) {
         _analysisService.analyze(_audioBuffer);
         _audioBuffer.clear();
       }
@@ -456,7 +458,7 @@ class HomeController extends GetxController {
     await _fileRaf!.setPosition(0);
     
     // Header Construction
-    final sampleRate = 16000;
+    final sampleRate = _analysisService.currentSampleRate;
     final channels = 1;
     final byteRate = sampleRate * channels * 2;
     final fileSize = _dataSize + 36;

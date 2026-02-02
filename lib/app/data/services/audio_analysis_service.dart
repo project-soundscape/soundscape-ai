@@ -1,114 +1,169 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
+import 'package:path_provider/path_provider.dart';
+import 'storage_service.dart';
 
 class AudioAnalysisService extends GetxService {
+  final StorageService _storage = Get.find<StorageService>();
+  
   Interpreter? _interpreter;
   List<String> _labels = [];
   
-  // YAMNet specific
-  static const int sampleRate = 16000;
-  static const int inputSize = 15600; // 0.975s
+  // Model Config
+  int currentSampleRate = 16000;
+  int currentInputSize = 15600; // Default for YAMNet
+  int numClasses = 521;
+  bool isPerch = false;
+  
+  // YAMNet defaults
+  static const int yamnetSampleRate = 16000;
+  static const int yamnetInputSize = 15600; 
+  static const int inputSize = 15600; // For backward compatibility
+  
+  // BirdNET defaults
+  static const int birdnetSampleRate = 48000;
+  static const int birdnetInputSize = 144000; // 3 seconds at 48kHz
   
   final RxDouble speechConfidence = 0.0.obs;
   final RxString topEvent = "Silence".obs;
   final RxList<MapEntry<String, double>> topPredictions = <MapEntry<String, double>>[].obs;
+  final RxBool isModelLoading = false.obs;
   
   bool get isReady => _interpreter != null && _labels.isNotEmpty;
 
   @override
   void onInit() {
     super.onInit();
-    _loadModel();
+    _loadActiveModel();
   }
 
-  Future<void> _loadModel() async {
+  Future<void> reloadModel() async {
+    await _loadActiveModel();
+  }
+
+  Future<void> _loadActiveModel() async {
+    isModelLoading.value = true;
     try {
-      final options = InterpreterOptions();
-      // On Android, use NNAPI if available? For now, CPU is safer.
-      // options.addDelegate(NnApiDelegate());
-      
+      if (_storage.usePerchModel) {
+        await _loadBirdNetModel();
+      } else {
+        await _loadYamnetModel();
+      }
+    } finally {
+      isModelLoading.value = false;
+    }
+  }
+
+  Future<void> _loadYamnetModel() async {
+    try {
       print("AudioAnalysis: Loading YAMNet model...");
+      final options = InterpreterOptions();
       _interpreter = await Interpreter.fromAsset('assets/tflite/yamnet.tflite', options: options);
-      print("AudioAnalysis: Model Loaded. Input shape: ${_interpreter?.getInputTensor(0).shape}");
       
-      await _loadLabels();
+      currentSampleRate = yamnetSampleRate;
+      currentInputSize = yamnetInputSize;
+      numClasses = 521;
+      isPerch = false;
+
+      await _loadYamnetLabels();
+      print("AudioAnalysis: YAMNet Ready.");
     } catch (e) {
       print("AudioAnalysis: Error loading YAMNet: $e");
     }
   }
 
-  Future<void> _loadLabels() async {
+  Future<void> _loadBirdNetModel() async {
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final modelFile = File('${appDir.path}/models/birdnet.tflite');
+      
+      if (!await modelFile.exists()) {
+        print("AudioAnalysis: BirdNET model file not found. Falling back to YAMNet.");
+        _storage.usePerchModel = false;
+        return _loadYamnetModel();
+      }
+
+      print("AudioAnalysis: Loading BirdNET model from ${modelFile.path}...");
+      _interpreter = Interpreter.fromFile(modelFile);
+      
+      currentSampleRate = birdnetSampleRate;
+      currentInputSize = birdnetInputSize;
+      isPerch = true; // Still using this flag for 'advanced model' logic
+
+      await _loadBirdNetLabels();
+      numClasses = _labels.length;
+      print("AudioAnalysis: BirdNET Ready. Classes: $numClasses");
+    } catch (e) {
+      print("AudioAnalysis: Error loading BirdNET: $e. Falling back.");
+      _storage.usePerchModel = false;
+      await _loadYamnetModel();
+    }
+  }
+
+  Future<void> _loadYamnetLabels() async {
     try {
       final csvData = await rootBundle.loadString('assets/tflite/yamnet_class_map.csv');
       final lines = csvData.split('\n');
-      
       _labels = List.filled(521, "Unknown");
-      
       for (var i = 1; i < lines.length; i++) {
-        final line = lines[i];
-        if (line.trim().isEmpty) continue;
-        
-        final parts = line.split(',');
+        final parts = lines[i].split(',');
         if (parts.length >= 3) {
             final index = int.tryParse(parts[0]);
-            String name = parts.sublist(2).join(',');
-            if (name.startsWith('"') && name.endsWith('"')) {
-              name = name.substring(1, name.length - 1);
-            }
-            
-            if (index != null && index < 521) {
-              _labels[index] = name.trim();
-            }
+            String name = parts.sublist(2).join(',').replaceAll('"', '').trim();
+            if (index != null && index < 521) _labels[index] = name;
         }
       }
-      print("AudioAnalysis: Labels loaded. Count: ${_labels.length}. Label[0]: ${_labels[0]}");
     } catch (e) {
-      print("AudioAnalysis: Error loading labels: $e");
+      print("Labels Error: $e");
     }
   }
-  
-  // ... (existing code)
+
+  Future<void> _loadBirdNetLabels() async {
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final labelsFile = File('${appDir.path}/models/birdnet_labels.txt');
+      if (await labelsFile.exists()) {
+        final lines = await labelsFile.readAsLines();
+        _labels = lines.map((l) => l.split('_').last.trim()).toList();
+      }
+    } catch (e) {
+      print("BirdNET Labels Error: $e");
+    }
+  }
 
   void analyze(List<double> buffer) {
-    if (_interpreter == null) return;
-    if (buffer.length < inputSize) return;
+    if (_interpreter == null || _labels.isEmpty) return;
+    if (buffer.length < currentInputSize) return;
 
-    final input = Float32List.fromList(buffer.sublist(0, inputSize));
-    var output = List<double>.filled(521, 0).reshape([1, 521]);
+    final input = Float32List.fromList(buffer.sublist(0, currentInputSize));
+    var output = List<double>.filled(numClasses, 0).reshape([1, numClasses]);
     
     try {
       _interpreter!.run(input, output);
       
-      // 1. Update Speech Confidence
-      if (_labels.isNotEmpty && _labels[0] == 'Speech') {
+      if (!isPerch && _labels[0] == 'Speech') {
          speechConfidence.value = output[0][0];
       }
       
-      // 2. Get Top 5 Predictions
-      // Create a list of (index, score)
       List<MapEntry<int, double>> scores = [];
-      for(int i=0; i<521; i++) {
+      for(int i=0; i<numClasses; i++) {
         scores.add(MapEntry(i, output[0][i]));
       }
       
-      // Sort descending
       scores.sort((a, b) => b.value.compareTo(a.value));
       
-      // Take top 5
       final top5 = scores.take(5).map((e) {
         final label = _labels.length > e.key ? _labels[e.key] : "Unknown";
         return MapEntry(label, e.value);
       }).toList();
       
       topPredictions.assignAll(top5);
-      
-      // Update top event for debug
       if (top5.isNotEmpty) {
         topEvent.value = "${top5.first.key} (${(top5.first.value*100).toInt()}%)";
       }
-
     } catch (e) {
       print("AudioAnalysis: Inference Failed: $e");
     }

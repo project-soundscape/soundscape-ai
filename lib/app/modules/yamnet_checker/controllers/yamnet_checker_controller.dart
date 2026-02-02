@@ -43,7 +43,7 @@ class YamnetCheckerController extends GetxController {
       await _audioCapture.start(
         _onAudioData,
         (err) => print("Checker Capture Error: $err"),
-        sampleRate: 16000,
+        sampleRate: _analysisService.currentSampleRate,
         bufferSize: 3000
       );
       isMonitoring.value = true;
@@ -63,7 +63,7 @@ class YamnetCheckerController extends GetxController {
     
     if (data is List<double>) {
       _audioBuffer.addAll(data);
-      if (_audioBuffer.length >= AudioAnalysisService.inputSize) {
+      if (_audioBuffer.length >= _analysisService.currentInputSize) {
         _analysisService.analyze(_audioBuffer);
         _audioBuffer.clear();
       }

@@ -3,11 +3,15 @@ import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../data/services/appwrite_service.dart';
 import '../../../data/services/storage_service.dart';
+import '../../../data/services/model_download_service.dart';
+import '../../../data/services/audio_analysis_service.dart';
 import '../../../routes/app_pages.dart';
 
 class SettingsController extends GetxController {
   final _appwriteService = Get.find<AppwriteService>();
   final _storageService = Get.find<StorageService>();
+  final _modelDownloadService = Get.find<ModelDownloadService>();
+  final _analysisService = Get.find<AudioAnalysisService>();
   
   final appVersion = ''.obs;
   
@@ -15,6 +19,8 @@ class SettingsController extends GetxController {
   final isDarkMode = false.obs;
   final notificationsEnabled = true.obs;
   final showRecordingInstructions = true.obs;
+  final useAdvancedModel = false.obs;
+  final isModelDownloaded = false.obs;
 
   bool get isLoggedIn => _appwriteService.isLoggedIn.value;
   String get userName => _appwriteService.currentUser.value?.name ?? 'Anonymous';
@@ -25,12 +31,18 @@ class SettingsController extends GetxController {
     super.onInit();
     _loadAppVersion();
     _loadSettings();
+    _checkModelStatus();
+  }
+
+  Future<void> _checkModelStatus() async {
+    isModelDownloaded.value = await _modelDownloadService.isModelDownloaded();
   }
 
   void _loadSettings() {
     isDarkMode.value = _storageService.isDarkMode;
     notificationsEnabled.value = _storageService.notificationsEnabled;
     showRecordingInstructions.value = _storageService.showRecordingInstructions;
+    useAdvancedModel.value = _storageService.usePerchModel;
     
     // Apply theme after build frame to avoid "setState called during build" error
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -53,6 +65,30 @@ class SettingsController extends GetxController {
     showRecordingInstructions.value = val;
     _storageService.showRecordingInstructions = val;
   }
+
+  Future<void> toggleAdvancedModel(bool val) async {
+    if (val && !isModelDownloaded.value) {
+      await _modelDownloadService.downloadModel();
+      await _checkModelStatus();
+      if (!isModelDownloaded.value) return; 
+    }
+    
+    useAdvancedModel.value = val;
+    _storageService.usePerchModel = val;
+    await _analysisService.reloadModel();
+  }
+
+  Future<void> deleteAdvancedModel() async {
+    await _modelDownloadService.deleteModel();
+    isModelDownloaded.value = false;
+    useAdvancedModel.value = false;
+    await _analysisService.reloadModel();
+  }
+
+  RxDouble get downloadProgress => _modelDownloadService.downloadProgress;
+  RxBool get isDownloading => _modelDownloadService.isDownloading;
+  RxString get downloadStatus => _modelDownloadService.statusMessage;
+
 
   Future<void> _loadAppVersion() async {
     final info = await PackageInfo.fromPlatform();
