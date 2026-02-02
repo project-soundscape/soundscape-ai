@@ -150,6 +150,7 @@ class AppwriteService extends GetxService {
           latitude: (data['latitude'] as num?)?.toDouble(),
           longitude: (data['longitude'] as num?)?.toDouble(),
           status: (data['status'] as String?)?.toLowerCase() ?? 'pending',
+          streamUrl: data['streamUrl'] as String?,
         );
 
         try {

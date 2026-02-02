@@ -15,6 +15,8 @@ import '../modules/yamnet_checker/bindings/yamnet_checker_binding.dart';
 import '../modules/yamnet_checker/views/yamnet_checker_view.dart';
 import '../modules/noise_monitor/bindings/noise_monitor_binding.dart';
 import '../modules/noise_monitor/views/noise_monitor_view.dart';
+import '../modules/live_stream/bindings/live_stream_binding.dart';
+import '../modules/live_stream/views/live_stream_view.dart';
 
 part 'app_routes.dart';
 
@@ -63,6 +65,11 @@ class AppPages {
       name: _Paths.NOISE_MONITOR,
       page: () => const NoiseMonitorView(),
       binding: NoiseMonitorBinding(),
+    ),
+    GetPage(
+      name: _Paths.LIVE_STREAM,
+      page: () => const LiveStreamView(),
+      binding: LiveStreamBinding(),
     ),
   ];
 }

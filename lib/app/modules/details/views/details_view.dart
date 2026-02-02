@@ -6,6 +6,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../../routes/app_pages.dart';
 import '../controllers/details_controller.dart';
 import '../../map/providers/persistent_tile_provider.dart';
 
@@ -162,6 +163,20 @@ class DetailsView extends GetView<DetailsController> {
                                elevation: 0,
                              ),
                            )),
+                           if (controller.recording.streamUrl != null && controller.recording.streamUrl!.isNotEmpty)
+                             Padding(
+                               padding: const EdgeInsets.only(left: 12),
+                               child: ElevatedButton.icon(
+                                 onPressed: () => Get.toNamed(Routes.LIVE_STREAM, arguments: controller.recording.streamUrl),
+                                 icon: const Icon(Icons.live_tv),
+                                 label: const Text('Live Feed'),
+                                 style: ElevatedButton.styleFrom(
+                                   backgroundColor: Colors.red[50],
+                                   foregroundColor: Colors.red[900],
+                                   elevation: 0,
+                                 ),
+                               ),
+                             ),
                          ],
                        )
                     ],

@@ -276,6 +276,20 @@ class MapView extends GetView<SoundMapController> {
                                   const SizedBox(width: 12),
                                   _buildBadge(context, Icons.location_on_outlined, "${rec.latitude?.toStringAsFixed(3)}, ${rec.longitude?.toStringAsFixed(3)}"),
                                   const Spacer(),
+                                  if (rec.streamUrl != null && rec.streamUrl!.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 12),
+                                      child: TextButton.icon(
+                                        onPressed: () => Get.toNamed(Routes.LIVE_STREAM, arguments: rec.streamUrl),
+                                        icon: const Icon(Icons.live_tv, size: 16, color: Colors.red),
+                                        label: const Text("GO LIVE", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                                          backgroundColor: Colors.red.withOpacity(0.1),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        ),
+                                      ),
+                                    ),
                                   Text(
                                     "Details",
                                     style: TextStyle(

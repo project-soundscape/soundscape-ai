@@ -12,6 +12,7 @@ class Recording {
   String? commonName;
   double? confidence;
   String? notes;
+  String? streamUrl;
   Map<String, double>? predictions;
 
   Recording({
@@ -26,6 +27,7 @@ class Recording {
     this.commonName,
     this.confidence,
     this.notes,
+    this.streamUrl,
     this.predictions,
   });
 
@@ -42,6 +44,7 @@ class Recording {
       'commonName': commonName,
       'confidence': confidence,
       'notes': notes,
+      'streamUrl': streamUrl,
       'predictions': predictions,
     };
   }
@@ -59,6 +62,7 @@ class Recording {
       commonName: map['commonName'],
       confidence: map['confidence'],
       notes: map['notes'],
+      streamUrl: map['streamUrl'],
       predictions: map['predictions'] != null 
           ? Map<String, double>.from(map['predictions']) 
           : null,

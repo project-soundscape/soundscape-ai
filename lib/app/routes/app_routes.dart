@@ -11,6 +11,7 @@ abstract class Routes {
   static const SPLASH = _Paths.SPLASH;
   static const YAMNET_CHECKER = _Paths.YAMNET_CHECKER;
   static const NOISE_MONITOR = _Paths.NOISE_MONITOR;
+  static const LIVE_STREAM = _Paths.LIVE_STREAM;
 }
 
 abstract class _Paths {
@@ -23,4 +24,5 @@ abstract class _Paths {
   static const SPLASH = '/splash';
   static const YAMNET_CHECKER = '/yamnet-checker';
   static const NOISE_MONITOR = '/noise-monitor';
+  static const LIVE_STREAM = '/live-stream';
 }
