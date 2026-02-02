@@ -40,7 +40,7 @@ class ModelDownloadService extends GetxService {
     AcousticModel(
       id: 'birdnet_v2.4',
       name: 'BirdNET-Analyzer v2.4',
-      description: 'Comprehensive identification of 6,500+ global bird species. (High Accuracy)',
+      description: 'The Gold Standard: 6,500+ species with high precision. (Kaggle Bundle)',
       downloadUrl: "https://www.kaggle.com/api/v1/models/shadiakiki1/birdnet-analyzer/tfLite/birdnet_global_6k_v2.4_model_fp32-1/3/download",
       labelsUrl: "", // Included in archive
       isArchive: true,
@@ -48,22 +48,22 @@ class ModelDownloadService extends GetxService {
       inputSize: 144000,
     ),
     AcousticModel(
-      id: 'birdnet_lite',
-      name: 'BirdNET-Lite',
-      description: 'Lightweight model for 6,000 species. (Fastest performance)',
-      downloadUrl: "https://github.com/kahst/BirdNET-Lite/raw/main/model/BirdNET_6K_GLOBAL_pub_model.tflite",
-      labelsUrl: "https://github.com/kahst/BirdNET-Lite/raw/main/model/labels.txt",
+      id: 'birdnet_pi',
+      name: 'BirdNET-Pi (Global)',
+      description: 'Highly reliable identification engine used in research stations.',
+      downloadUrl: "https://raw.githubusercontent.com/mcguirepr89/BirdNET-Pi/main/model/BirdNET_GLOBAL_6K_V2.4_MData_Model_FP16.tflite",
+      labelsUrl: "https://raw.githubusercontent.com/kahst/BirdNET-Lite/main/model/labels.txt",
       sampleRate: 48000,
       inputSize: 144000,
     ),
     AcousticModel(
-      id: 'urbansound',
-      name: 'Urban Noise Classifier',
-      description: 'Identifies city sounds: traffic, sirens, construction, and more.',
-      downloadUrl: "https://raw.githubusercontent.com/google-research/scenic/main/scenic/projects/perch/labels.csv", // Placeholder, need actual TFLite
-      labelsUrl: "",
-      sampleRate: 16000,
-      inputSize: 15600,
+      id: 'birdnet_lite',
+      name: 'BirdNET-Lite v2.0',
+      description: 'Optimized for older devices: 6,000 species with lower CPU usage.',
+      downloadUrl: "https://raw.githubusercontent.com/kahst/BirdNET-Lite/main/model/BirdNET_6K_GLOBAL_pub_model.tflite", // Attempting raw again with fixed headers
+      labelsUrl: "https://raw.githubusercontent.com/kahst/BirdNET-Lite/main/model/labels.txt",
+      sampleRate: 48000,
+      inputSize: 144000,
     ),
   ];
 
@@ -72,7 +72,7 @@ class ModelDownloadService extends GetxService {
     final modelFile = File('${appDir.path}/models/$id.tflite');
     final labelsFile = File('${appDir.path}/models/${id}_labels.txt');
     
-    if (!await modelFile.exists() || !await labelsFile.exists()) return false;
+    if (!await modelFile.exists()) return false;
     
     final modelSize = await modelFile.length();
     return modelSize > 1 * 1024 * 1024; // At least 1MB
@@ -93,8 +93,11 @@ class ModelDownloadService extends GetxService {
 
       final dio = Dio(BaseOptions(
         followRedirects: true,
-        maxRedirects: 10,
+        maxRedirects: 15,
         connectTimeout: const Duration(seconds: 60),
+        headers: {
+          'User-Agent': 'SoundScape-Mobile/1.0',
+        },
       ));
 
       if (model.isArchive) {
@@ -112,7 +115,7 @@ class ModelDownloadService extends GetxService {
     } catch (e) {
       statusMessage.value = "Download failed.";
       print("ModelDownload Error: $e");
-      _showSafeSnackbar("Download Error", "Could not retrieve the model package.");
+      _showSafeSnackbar("Download Error", "Could not retrieve the model package. Status: $e");
     } finally {
       isDownloading.value = false;
       downloadingModelId.value = '';
@@ -123,13 +126,36 @@ class ModelDownloadService extends GetxService {
     final modelPath = '${dir.path}/${model.id}.tflite';
     final labelsPath = '${dir.path}/${model.id}_labels.txt';
 
-    statusMessage.value = "Downloading Model...";
-    await dio.download(model.downloadUrl, modelPath, onReceiveProgress: (c, t) {
-      if (t > 0) downloadProgress.value = (c / t) * 0.8;
-    });
+    statusMessage.value = "Downloading Model Engine...";
+    
+    // Explicitly configure redirection for the binary download
+    await dio.download(
+      model.downloadUrl, 
+      modelPath, 
+      options: Options(
+        followRedirects: true,
+        maxRedirects: 10,
+        validateStatus: (status) => status != null && status < 400,
+      ),
+      onReceiveProgress: (c, t) {
+        if (t > 0) downloadProgress.value = (c / t) * 0.9; // Model is 90% of task
+      }
+    );
 
-    statusMessage.value = "Downloading labels...";
-    await dio.download(model.labelsUrl, labelsPath);
+    if (model.labelsUrl.isNotEmpty) {
+      statusMessage.value = "Downloading Class Mapping...";
+      await dio.download(
+        model.labelsUrl, 
+        labelsPath,
+        options: Options(
+          followRedirects: true,
+          validateStatus: (status) => status != null && status < 400,
+        )
+      );
+    } else {
+      // Create a default label file if none provided
+      await File(labelsPath).writeAsString("Unclassified");
+    }
   }
 
   Future<void> _downloadAndExtract(Dio dio, AcousticModel model, Directory dir) async {
