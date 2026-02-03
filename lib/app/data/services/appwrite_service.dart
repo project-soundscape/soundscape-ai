@@ -332,7 +332,11 @@ class AppwriteService extends GetxService {
        _fetchDetections(doc.$id, recording);
        if(Get.context != null) {
          ScaffoldMessenger.of(Get.context!).showSnackBar(
-            const SnackBar(content: Text("Analysis already completed. Fetching results..."), backgroundColor: Colors.teal)
+            const SnackBar(
+              content: Text("Analysis already completed. Tap 'Re-analyze' to force new analysis."), 
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 4),
+            )
          );
        }
     } else {

@@ -55,6 +55,19 @@ class LibraryController extends GetxController {
          await _storageService.updateRecording(rec);
       }
 
+      // 3. Sync Deletions: Remove local items that are missing from remote
+      // Only remove items that were successfully uploaded/processed
+      final localRecordings = _storageService.getRecordings();
+      final remoteIds = remote.map((e) => e.id).toSet();
+      
+      for (var local in localRecordings) {
+        if ((local.status == 'uploaded' || local.status == 'processed') && 
+            !remoteIds.contains(local.id)) {
+           print("Library: Syncing deletion for ${local.id}");
+           await _storageService.deleteRecording(local.id);
+        }
+      }
+
     } catch (e) {
       print("Library: Error loading recordings: $e");
     } finally {

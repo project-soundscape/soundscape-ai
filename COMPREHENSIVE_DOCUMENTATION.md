@@ -1357,38 +1357,9 @@ flowchart TD
     style P16 fill:#c5e1a5
     style P17 fill:#ffecb3
 ```
-└────────┬─────────┘
-         │ Permission Granted
-         ↓
-┌──────────────────┐      ┌──────────────────┐
-│ P1.2: Initialize │────→ │ P1.3: Capture    │
-│ Audio Capture    │      │ Audio Stream     │
-└──────────────────┘      └────────┬─────────┘
-                                   │ Audio Buffer
-                                   ↓
-                          ┌──────────────────┐
-                          │ P1.4: Render     │
-                          │ Waveform         │
-                          └──────────────────┘
-                                   │
-                                   ↓
-                          ┌──────────────────┐
-                          │ P1.5: Real-time  │
-                          │ Speech Detection │
-                          └────────┬─────────┘
-                                   │ No Speech
-                                   ↓
-┌─────────┐               ┌──────────────────┐
-│  USER   │──Stop────────→│ P1.6: Save Audio │
-└─────────┘               │ to File          │
-                          └────────┬─────────┘
-                                   │ Audio File
-                                   ↓
-                          ┌──────────────────┐
-                          │    To P2:        │
-                          │ Audio Analysis   │
-                          └──────────────────┘
-```
+
+**Recording Process Continued:**
+The process continues with audio capture initialization, real-time waveform rendering, speech detection, and file saving before proceeding to analysis.
 
 ### 10.4 Level 2 DFD (Analysis Process - v5.0.0)
 
@@ -1420,45 +1391,36 @@ flowchart TD
 
 ### 10.5 Level 2 DFD (Sync Process)
 
-```
-┌──────────────────┐
-│ Local Database   │
-└────────┬─────────┘
-         │ Pending Recordings
-         ↓
-┌──────────────────┐
-│ P6.1: Check      │
-│ Network Status   │
-└────────┬─────────┘
-         │ Connected
-         ↓
-┌──────────────────┐
-│ P6.2: Compress   │
-│ Audio Files      │
-└────────┬─────────┘
-         │
-         ↓
-┌──────────────────┐      ┌──────────────────┐
-│ P6.3: Upload     │────→ │ Appwrite Storage │
-│ Audio File       │      └──────────────────┘
-└────────┬─────────┘
-         │ File ID
-         ↓
-┌──────────────────┐      ┌──────────────────┐
-│ P6.4: Create     │────→ │ Appwrite         │
-│ Database Entry   │      │ Database         │
-└────────┬─────────┘      └──────────────────┘
-         │ Success
-         ↓
-┌──────────────────┐
-│ P6.5: Update     │
-│ Local Status     │
-└────────┬─────────┘
-         │
-         ↓
-┌──────────────────┐
-│ Sync Complete    │
-└──────────────────┘
+```mermaid
+flowchart TD
+    DB["Local Database<br/>(Pending Recordings)"]
+    P61["P6.1: Check<br/>Network Status"]
+    P62["P6.2: Compress<br/>Audio Files"]
+    P63["P6.3: Upload<br/>Audio File"]
+    Storage["Appwrite Storage"]
+    P64["P6.4: Create<br/>Database Entry"]
+    AppDB["Appwrite<br/>Database"]
+    P65["P6.5: Update<br/>Local Status"]
+    Complete["Sync Complete"]
+    
+    DB -->|"Pending Recordings"| P61
+    P61 -->|"Connected"| P62
+    P62 --> P63
+    P63 --> Storage
+    Storage -->|"File ID"| P64
+    P64 --> AppDB
+    AppDB -->|"Success"| P65
+    P65 --> Complete
+    
+    style DB fill:#e1f5ff
+    style P61 fill:#fff3e0
+    style P62 fill:#ffe0b2
+    style P63 fill:#c8e6c9
+    style Storage fill:#f3e5f5
+    style P64 fill:#e1bee7
+    style AppDB fill:#f3e5f5
+    style P65 fill:#ffecb3
+    style Complete fill:#c5e1a5
 ```
 
 ### 10.6 Data Stores

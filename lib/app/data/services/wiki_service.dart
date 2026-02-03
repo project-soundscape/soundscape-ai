@@ -10,7 +10,17 @@ class WikiService extends GetConnect {
   }
 
   Future<Map<String, dynamic>?> getBirdInfo(String scientificName) async {
-    final pageTitle = scientificName.trim().replaceAll(' ', '_');
+    // Clean the species name: Extract only the scientific name part
+    // Format can be: "Fringilla coelebs_Зяблик" or "Fringilla coelebs" or "Common Name"
+    String cleanedName = scientificName.trim();
+    
+    // If contains underscore, take only the part before it (scientific name)
+    if (cleanedName.contains('_')) {
+      cleanedName = cleanedName.split('_').first.trim();
+    }
+    
+    // Replace spaces with underscores for Wikipedia URL
+    final pageTitle = cleanedName.replaceAll(' ', '_');
     
     // 1. Check Local Cache
     if (_cacheBox.containsKey(pageTitle)) {
@@ -24,7 +34,10 @@ class WikiService extends GetConnect {
     final url = 'https://en.wikipedia.org/api/rest_v1/page/summary/$pageTitle';
 
     try {
-      final response = await get(url);
+      final response = await get(
+        url,
+        headers: {'User-Agent': 'SoundScape/1.0 (soundscape@example.com)'},
+      );
       
       if (response.status.hasError) {
         print('WikiService: Error ${response.statusCode} fetching $scientificName');
