@@ -101,9 +101,8 @@ We may update this policy. Changes will be posted in-app and on our website. Con
 
 For privacy concerns or data requests:
 
-- **Email**: privacy@soundscape.app
-- **Website**: https://soundscape.app/privacy
-- **Mail**: [Your Business Address]
+- **Email**: support@pro26.in         
+- **Website**: https://pro26.in
 
 ## Consent
 

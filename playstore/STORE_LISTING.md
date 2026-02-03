@@ -15,8 +15,10 @@
 ## Short Description (80 characters max)
 
 ```
-Record bird sounds & identify species with AI. Offline-first, GPS-tagged.
+Record bird sounds and identify 500+ species with on-device AI and GPS tagging.
 ```
+
+**Character count**: 80
 
 ---
 
@@ -117,6 +119,14 @@ Version 1.0.0
 
 ## Keywords/Tags
 
+**Play Store Tags (select up to 5)**:
+1. Bird identification
+2. Nature and wildlife
+3. Audio recorder
+4. Offline apps
+5. Science and education
+
+**Search Keywords** (for reference):
 ```
 bird identification, bird songs, bird sounds, bird watching, birding, birdwatching, nature sounds, wildlife, ornithology, bird call identifier, bird species, birdnet, bird recognition, nature recording, audio recorder, bird app, citizen science, wildlife monitoring
 ```
