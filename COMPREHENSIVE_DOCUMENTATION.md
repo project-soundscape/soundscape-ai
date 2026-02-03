@@ -207,48 +207,52 @@ SoundScape integrates multiple technologies into a unified platform:
 
 ### 5.1 High-Level Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    PRESENTATION LAYER                        │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │  Home    │  │ Library  │  │   Map    │  │ Settings │   │
-│  │  Screen  │  │  Screen  │  │  Screen  │  │  Screen  │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                            ↕
-┌─────────────────────────────────────────────────────────────┐
-│                    CONTROLLER LAYER (GetX)                   │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │HomeController│  │ LibController│  │ MapController│     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-└─────────────────────────────────────────────────────────────┘
-                            ↕
-┌─────────────────────────────────────────────────────────────┐
-│                      SERVICE LAYER                           │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │   Appwrite   │  │AudioAnalysis │  │   Location   │     │
-│  │   Service    │  │   Service    │  │   Service    │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │   Storage    │  │    Noise     │  │     Sync     │     │
-│  │   Service    │  │   Service    │  │   Service    │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-└─────────────────────────────────────────────────────────────┘
-                            ↕
-┌─────────────────────────────────────────────────────────────┐
-│                      DATA LAYER                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │     Hive     │  │   Appwrite   │  │  TFLite      │     │
-│  │  (Local DB)  │  │  (Cloud DB)  │  │  (ML Models) │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-└─────────────────────────────────────────────────────────────┘
-                            ↕
-┌─────────────────────────────────────────────────────────────┐
-│                    HARDWARE LAYER                            │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │  Microphone  │  │  GPS Sensor  │  │ Accelerometer│     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph PL["PRESENTATION LAYER"]
+        Home["Home<br/>Screen"]
+        Library["Library<br/>Screen"]
+        Map["Map<br/>Screen"]
+        Settings["Settings<br/>Screen"]
+    end
+    
+    subgraph CL["CONTROLLER LAYER (GetX)"]
+        HomeCtrl["HomeController"]
+        LibCtrl["LibraryController"]
+        MapCtrl["MapController"]
+    end
+    
+    subgraph SL["SERVICE LAYER"]
+        Appwrite["Appwrite<br/>Service"]
+        Audio["AudioAnalysis<br/>Service"]
+        Location["Location<br/>Service"]
+        Storage["Storage<br/>Service"]
+        Noise["Noise<br/>Service"]
+        Sync["Sync<br/>Service"]
+    end
+    
+    subgraph DL["DATA LAYER"]
+        Hive["Hive<br/>(Local DB)"]
+        AppwriteDB["Appwrite<br/>(Cloud DB)"]
+        TFLite["TFLite<br/>(ML Models)"]
+    end
+    
+    subgraph HL["HARDWARE LAYER"]
+        Mic["Microphone"]
+        GPS["GPS Sensor"]
+        Accel["Accelerometer"]
+    end
+    
+    PL <--> CL
+    CL <--> SL
+    SL <--> DL
+    DL <--> HL
+    
+    style PL fill:#e1f5ff
+    style CL fill:#fff3e0
+    style SL fill:#f3e5f5
+    style DL fill:#e8f5e9
+    style HL fill:#fce4ec
 ```
 
 ### 5.2 Component Architecture
@@ -268,28 +272,26 @@ SoundScape integrates multiple technologies into a unified platform:
 - **Real-time**: WebSocket for live updates
 
 #### 5.2.3 Machine Learning Pipeline (v5.0.0)
-```
-Audio Input (WAV/M4A/PCM)
-    ↓
-Preprocessing (kaiser_fast resampling)
-    ↓
-YAMNet Pre-Filter (16kHz)
-    │
-    ├─→ Bird Detected (>0.3) ──→ Continue
-    │
-    └─→ No Bird ──────────────→ Return "No bird detected"
-    ↓
-Perch V2 Inference (32kHz)
-    │
-    ├─→ Overlapping Windows (5s with 2.5s stride)
-    │
-    ├─→ Per-chunk Predictions
-    │
-    ├─→ Temporal Smoothing (Moving Average + Weighted)
-    │
-    └─→ Confidence Boosting (YAMNet + Perch Agreement)
-    ↓
-Top 5 Species Predictions + Metadata
+
+```mermaid
+flowchart TD
+    A["Audio Input<br/>(WAV/M4A/PCM)"] --> B["Preprocessing<br/>(kaiser_fast resampling)"]
+    B --> C["YAMNet Pre-Filter<br/>(16kHz)"]
+    C -->|"Bird Score < 0.3"| D["Return<br/>'No bird detected'"]
+    C -->|"Bird Score ≥ 0.3"| E["Perch V2 Inference<br/>(32kHz)"]
+    E --> F["Overlapping Windows<br/>(5s with 2.5s stride)"]
+    F --> G["Per-chunk Predictions"]
+    G --> H["Temporal Smoothing<br/>(Moving Average + Weighted)"]
+    H --> I["Confidence Boosting<br/>(YAMNet + Perch Agreement)"]
+    I --> J["Top 5 Species<br/>Predictions + Metadata"]
+    
+    style A fill:#e1f5ff
+    style C fill:#fff3e0
+    style D fill:#ffcdd2
+    style E fill:#c8e6c9
+    style H fill:#f3e5f5
+    style I fill:#ffe0b2
+    style J fill:#c5e1a5
 ```
 
 ### 5.3 Data Flow Architecture
@@ -315,6 +317,49 @@ Top 5 Species Predictions + Metadata
 8. Results stored in detections collection (scientificName[], confidenceLevel[])
 9. Flutter UI displays multi-species results with rankings and statistics
 10. Wikipedia data fetched for all detected species
+
+#### 5.3.1 Complete Analysis Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant User as 👤 User
+    participant App as Flutter App
+    participant Appwrite as Appwrite Function
+    participant API as FastAPI (v5.0.0)
+    participant YAMNet as YAMNet Model
+    participant Perch as Perch V2 Model
+    participant Wiki as Wikipedia API
+    
+    User->>App: Upload Recording
+    App->>Appwrite: Send Audio File
+    Appwrite->>API: POST /classify/combined
+    
+    API->>API: Preprocess Audio (16kHz)
+    API->>YAMNet: Detect Bird Presence
+    
+    alt Bird Score < 0.3
+        YAMNet-->>API: No Bird Detected
+        API-->>Appwrite: {"bird_detected": false}
+        Appwrite-->>App: No Detection
+    else Bird Score ≥ 0.3
+        YAMNet-->>API: Bird Detected (score)
+        API->>API: Preprocess Audio (32kHz)
+        API->>Perch: Inference (overlapping windows)
+        Perch-->>API: Chunk Predictions
+        API->>API: Temporal Smoothing
+        API->>API: Confidence Boosting
+        API-->>Appwrite: Top 5 Species + Metadata
+        Appwrite->>Appwrite: Store in Detections Collection
+        Appwrite-->>App: Multi-Species Results
+        
+        loop For Each Species
+            App->>Wiki: Get Species Info
+            Wiki-->>App: Description + Image
+        end
+        
+        App->>User: Display Rankings + Statistics
+    end
+```
 
 ---
 
@@ -610,7 +655,81 @@ Inference Time: ~800ms on mobile
 
 ### 8.4 Database Schema
 
-#### 8.4.1 Local Database (Hive)
+#### 8.4.1 Data Model Class Diagram
+
+```mermaid
+classDiagram
+    class Recording {
+        +String id
+        +String filePath
+        +double latitude
+        +double longitude
+        +DateTime timestamp
+        +int duration
+        +String commonName
+        +double confidence
+        +String status
+        +String s3key
+        +Map~String,double~ predictions
+        +saveToLocal()
+        +uploadToCloud()
+        +delete()
+    }
+    
+    class Detection {
+        +String recordingId
+        +List~String~ scientificName
+        +List~int~ confidenceLevel
+        +String birdDetected
+        +String confidenceMethod
+        +double processingTime
+        +toJson()
+        +fromJson()
+    }
+    
+    class User {
+        +String userId
+        +String email
+        +String username
+        +int recordingsCount
+        +int speciesCount
+        +List~String~ badges
+        +updateStats()
+    }
+    
+    class Species {
+        +String commonName
+        +String scientificName
+        +String family
+        +String description
+        +String habitat
+        +String conservationStatus
+        +String imageUrl
+        +fetchFromWikipedia()
+    }
+    
+    Recording "1" --> "*" Detection : has
+    User "1" --> "*" Recording : creates
+    Detection "*" --> "*" Species : identifies
+    
+    class AudioAnalysisService {
+        +analyzeAudio(Recording)
+        +preprocessAudio(bytes)
+        +getTopSpecies()
+    }
+    
+    class AppwriteService {
+        +uploadRecording(Recording)
+        +fetchDetections(recordingId)
+        +syncData()
+    }
+    
+    AudioAnalysisService ..> Recording : processes
+    AppwriteService ..> Recording : syncs
+    AppwriteService ..> Detection : manages
+```
+
+#### 8.4.2 Local Database (Hive)
 ```dart
 @HiveType(typeId: 0)
 class Recording extends HiveObject {
@@ -828,7 +947,42 @@ Core audio recording and analysis functionality.
 14. Navigate to Details screen
 ```
 
-#### 9.2.5 Key Classes
+#### 9.2.5 Recording State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Requesting: User taps record
+    Requesting --> Recording: Permission granted
+    Requesting --> Idle: Permission denied
+    Recording --> Analyzing: User stops (≥15s)
+    Recording --> Recording: Insufficient duration
+    Analyzing --> Processed: Analysis complete
+    Analyzing --> Failed: Analysis error
+    Processed --> Syncing: Auto-sync enabled
+    Processed --> Idle: Return to home
+    Syncing --> Synced: Upload successful
+    Syncing --> Processed: Upload failed
+    Synced --> Idle: Return to home
+    Failed --> Idle: Retry/Cancel
+    
+    note right of Recording
+        Real-time:
+        - Waveform display
+        - Noise monitoring
+        - GPS tracking
+    end note
+    
+    note right of Analyzing
+        v5.0.0 Pipeline:
+        1. YAMNet pre-filter
+        2. Perch V2 inference
+        3. Temporal smoothing
+        4. Top 5 species
+    end note
+```
+
+#### 9.2.6 Key Classes
 ```dart
 class HomeController extends GetxController {
   RxBool isRecording = false.obs;
@@ -1128,74 +1282,81 @@ System Notifications:
 
 ### 10.1 Level 0 DFD (Context Diagram)
 
-```
-                    ┌──────────────┐
-                    │              │
-                    │     USER     │
-                    │              │
-                    └──────┬───────┘
-                           │
-                           │ Audio, Location
-                           ↓
-              ┌────────────────────────┐
-              │                        │
-              │   SOUNDSCAPE SYSTEM    │
-              │                        │
-              └────────┬───────────────┘
-                       │
-        ┌──────────────┼──────────────┐
-        │              │              │
-        ↓              ↓              ↓
-┌──────────────┐ ┌──────────┐ ┌───────────────┐
-│   Appwrite   │ │Wikipedia │ │   Community   │
-│   Backend    │ │   API    │ │    Users      │
-└──────────────┘ └──────────┘ └───────────────┘
+```mermaid
+flowchart TB
+    User["👤 USER"]
+    SS["SOUNDSCAPE<br/>SYSTEM"]
+    AW["Appwrite<br/>Backend"]
+    Wiki["Wikipedia<br/>API"]
+    Comm["Community<br/>Users"]
+    
+    User -->|"Audio, Location"| SS
+    SS --> AW
+    SS --> Wiki
+    SS --> Comm
+    
+    style User fill:#e1f5ff
+    style SS fill:#c8e6c9
+    style AW fill:#fff3e0
+    style Wiki fill:#f3e5f5
+    style Comm fill:#ffe0b2
 ```
 
 ### 10.2 Level 1 DFD (Main Processes)
 
-```
-┌─────────┐
-│  USER   │
-└────┬────┘
-     │
-     ↓
-┌─────────────────────────────────────────────────────────┐
-│                     SOUNDSCAPE                          │
-│                                                         │
-│  ┌──────────┐      ┌──────────┐      ┌──────────┐    │
-│  │  P1:     │      │  P2:     │      │  P3:     │    │
-│  │ Record   │─────→│ Analyze  │─────→│  Store   │    │
-│  │  Audio   │      │  Audio   │      │Recording │    │
-│  └──────────┘      └──────────┘      └─────┬────┘    │
-│       │                  │                  │         │
-│       ↓                  ↓                  ↓         │
-│  ┌──────────┐      ┌──────────┐      ┌──────────┐   │
-│  │  P4:     │      │  P5:     │      │  P6:     │   │
-│  │  Track   │      │  Manage  │      │  Sync    │   │
-│  │Location  │      │ Library  │      │  Data    │   │
-│  └──────────┘      └──────────┘      └─────┬────┘   │
-│                                             │        │
-└─────────────────────────────────────────────┼────────┘
-                                              │
-                                              ↓
-                                      ┌──────────────┐
-                                      │   Appwrite   │
-                                      │   Backend    │
-                                      └──────────────┘
+```mermaid
+flowchart TB
+    User["👤 USER"]
+    
+    subgraph SS["SOUNDSCAPE SYSTEM"]
+        P1["P1: Record<br/>Audio"]
+        P2["P2: Analyze<br/>Audio"]
+        P3["P3: Store<br/>Recording"]
+        P4["P4: Track<br/>Location"]
+        P5["P5: Manage<br/>Library"]
+        P6["P6: Sync<br/>Data"]
+        
+        P1 --> P2
+        P2 --> P3
+        P4 -.-> P1
+        P3 --> P5
+        P3 --> P6
+    end
+    
+    Backend["Appwrite<br/>Backend"]
+    
+    User --> P1
+    User --> P5
+    P6 --> Backend
+    
+    style User fill:#e1f5ff
+    style SS fill:#f0f0f0
+    style Backend fill:#fff3e0
 ```
 
 ### 10.3 Level 2 DFD (Recording Process)
 
+```mermaid
+flowchart TD
+    User["👤 USER"]
+    User -->|"Start Recording"| P11["P1.1: Request<br/>Permissions"]
+    P11 -->|"Permission Granted"| P12["P1.2: Initialize<br/>Audio Capture"]
+    P12 --> P13["P1.3: Capture<br/>Audio Stream"]
+    P13 --> P14["P1.4: Monitor<br/>Noise Level"]
+    P13 --> P15["P1.5: Get GPS<br/>Coordinates"]
+    P14 --> P16["P1.6: Save<br/>Recording"]
+    P15 --> P16
+    P16 -->|"Audio File"| P17["P1.7: Trigger<br/>Analysis"]
+    
+    style User fill:#e1f5ff
+    style P11 fill:#fff3e0
+    style P12 fill:#c8e6c9
+    style P13 fill:#ffe0b2
+    style P14 fill:#f3e5f5
+    style P15 fill:#f3e5f5
+    style P16 fill:#c5e1a5
+    style P17 fill:#ffecb3
 ```
-┌─────────┐
-│  USER   │
-└────┬────┘
-     │ Start Recording
-     ↓
-┌──────────────────┐
-│ P1.1: Request    │
-│ Permissions      │
 └────────┬─────────┘
          │ Permission Granted
          ↓
@@ -1229,55 +1390,32 @@ System Notifications:
                           └──────────────────┘
 ```
 
-### 10.4 Level 2 DFD (Analysis Process)
+### 10.4 Level 2 DFD (Analysis Process - v5.0.0)
 
-```
-┌──────────────────┐
-│ Audio File       │
-└────────┬─────────┘
-         │
-         ↓
-┌──────────────────┐
-│ P2.1: Load Audio │
-│ File             │
-└────────┬─────────┘
-         │
-         ↓
-┌──────────────────┐
-│ P2.2: Preprocess │
-│ (Normalize,      │
-│  Resample)       │
-└────────┬─────────┘
-         │
-         ↓
-┌──────────────────┐
-│ P2.3: Extract    │
-│ Mel-Spectrogram  │
-└────────┬─────────┘
-         │
-         ↓
-┌──────────────────┐      ┌──────────────────┐
-│ P2.4: BirdNET    │────→ │  ML Model        │
-│ Inference        │      │  (TFLite)        │
-└────────┬─────────┘      └──────────────────┘
-         │ Predictions
-         ↓
-┌──────────────────┐
-│ P2.5: Post-      │
-│ process Results  │
-└────────┬─────────┘
-         │
-         ↓
-┌──────────────────┐      ┌──────────────────┐
-│ P2.6: Fetch      │────→ │ Wikipedia API    │
-│ Species Info     │      └──────────────────┘
-└────────┬─────────┘
-         │
-         ↓
-┌──────────────────┐
-│    To P3:        │
-│ Store Recording  │
-└──────────────────┘
+```mermaid
+flowchart TD
+    AF["Audio File"] --> P21["P2.1: Load<br/>Audio File"]
+    P21 --> P22["P2.2: Preprocess<br/>(kaiser_fast)"]
+    P22 --> P23["P2.3: YAMNet<br/>Pre-Filter"]
+    P23 -->|"No Bird"| P24["P2.4: Return<br/>No Detection"]
+    P23 -->|"Bird Detected"| P25["P2.5: Perch V2<br/>Inference"]
+    P25 --> ML["ML Model<br/>(TensorFlow Hub)"]
+    ML --> P26["P2.6: Temporal<br/>Smoothing"]
+    P26 --> P27["P2.7: Confidence<br/>Boosting"]
+    P27 --> P28["P2.8: Post-process<br/>Results (Top 5)"]
+    P28 --> P29["P2.9: Fetch<br/>Species Info"]
+    P29 --> Wiki["Wikipedia API"]
+    P29 --> P30["To P3:<br/>Store Recording"]
+    
+    style AF fill:#e1f5ff
+    style P22 fill:#fff3e0
+    style P23 fill:#ffe0b2
+    style P24 fill:#ffcdd2
+    style P25 fill:#c8e6c9
+    style ML fill:#f3e5f5
+    style P26 fill:#e1bee7
+    style P27 fill:#ffecb3
+    style P30 fill:#c5e1a5
 ```
 
 ### 10.5 Level 2 DFD (Sync Process)
@@ -1536,31 +1674,45 @@ class UserPreferences {
 
 ### 11.3 Entity-Relationship Diagram
 
-```
-┌──────────────┐           ┌──────────────┐
-│    Users     │           │  Recordings  │
-│──────────────│           │──────────────│
-│ userId (PK)  │───────────│ id (PK)      │
-│ username     │ 1       * │ userId (FK)  │
-│ email        │           │ commonName   │
-│ fullName     │           │ latitude     │
-│ profilePic   │           │ longitude    │
-└──────────────┘           │ timestamp    │
-                           │ s3key        │
-                           └──────┬───────┘
-                                  │
-                                  │ classified as
-                                  │
-                                  ↓
-                           ┌──────────────┐
-                           │   Species    │
-                           │──────────────│
-                           │ name (PK)    │
-                           │ scientific   │
-                           │ description  │
-                           │ habitat      │
-                           │ status       │
-                           └──────────────┘
+```mermaid
+erDiagram
+    USERS ||--o{ RECORDINGS : creates
+    RECORDINGS }o--|| SPECIES : "classified as"
+    
+    USERS {
+        string userId PK
+        string username
+        string email
+        string fullName
+        string profilePicture
+        int recordingsCount
+        int speciesCount
+        int reputation
+    }
+    
+    RECORDINGS {
+        string id PK
+        string userId FK
+        string commonName
+        string scientificName
+        float latitude
+        float longitude
+        datetime timestamp
+        int duration
+        string status
+        string s3key
+        json predictions
+    }
+    
+    SPECIES {
+        string name PK
+        string scientificName
+        string family
+        string order
+        string description
+        string habitat
+        string conservationStatus
+    }
 ```
 
 ### 11.4 Indexes
@@ -1592,51 +1744,37 @@ Indexes for Recordings Collection:
 SoundScape utilizes a two-stage machine learning pipeline combining YAMNet and Perch V2 models for accurate and efficient bird species identification.
 
 #### 12.1.1 Architecture Overview
-```
-┌───────────────────────────────────────────────────┐
-│              AUDIO INPUT (M4A/WAV)                │
-└─────────────────┬─────────────────────────────────┘
-                  │
-                  ↓
-         ┌────────────────────┐
-         │  Audio Preprocessing │
-         │  (kaiser_fast)       │
-         └────────┬─────────────┘
-                  │
-                  ↓
-         ┌────────────────────┐
-         │   YAMNet (16kHz)   │
-         │   Bird Pre-Filter  │
-         └────────┬─────────────┘
-                  │
-         ┌────────┴────────┐
-         │                 │
-    Bird < 0.3        Bird ≥ 0.3
-         │                 │
-         ↓                 ↓
-  "No bird         ┌───────────────┐
-   detected"       │ Perch V2      │
-                   │ (32kHz)       │
-                   └───────┬───────┘
-                           │
-                  ┌────────┴────────┐
-                  │ Overlapping     │
-                  │ Windows (5s)    │
-                  │ Stride: 2.5s    │
-                  └────────┬────────┘
-                           │
-                  ┌────────┴────────┐
-                  │ Temporal        │
-                  │ Smoothing       │
-                  └────────┬────────┘
-                           │
-                  ┌────────┴────────┐
-                  │ Confidence      │
-                  │ Boosting        │
-                  └────────┬────────┘
-                           │
-                           ↓
-                  Top 5 Species + Scores
+
+```mermaid
+flowchart TB
+    A["📁 AUDIO INPUT<br/>(M4A/WAV)"]
+    B["🔧 Audio Preprocessing<br/>(kaiser_fast)"]
+    C["🎯 YAMNet (16kHz)<br/>Bird Pre-Filter"]
+    D["❌ No bird detected"]
+    E["🐦 Perch V2<br/>(32kHz)"]
+    F["⏱️ Overlapping Windows<br/>(5s, Stride: 2.5s)"]
+    G["📊 Temporal<br/>Smoothing"]
+    H["⬆️ Confidence<br/>Boosting"]
+    I["✅ Top 5 Species<br/>+ Scores"]
+    
+    A --> B
+    B --> C
+    C -->|"Score < 0.3"| D
+    C -->|"Score ≥ 0.3"| E
+    E --> F
+    F --> G
+    G --> H
+    H --> I
+    
+    style A fill:#e1f5ff,stroke:#0288d1,stroke-width:2px
+    style B fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style C fill:#ffe0b2,stroke:#ff6f00,stroke-width:2px
+    style D fill:#ffcdd2,stroke:#c62828,stroke-width:2px
+    style E fill:#c8e6c9,stroke:#388e3c,stroke-width:2px
+    style F fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style G fill:#e1bee7,stroke:#6a1b9a,stroke-width:2px
+    style H fill:#ffecb3,stroke:#ffa000,stroke-width:2px
+    style I fill:#c5e1a5,stroke:#689f38,stroke-width:3px
 ```
 
 ### 12.2 YAMNet (Bird Pre-Filter)
@@ -2084,6 +2222,36 @@ interpreter.run(batchInput, batchOutput);
 - ✅ **Temporal Smoothing**: **COMPLETED in v5.0.0** - Reduce prediction jitter across time
 - **Custom Model Training**: Allow users to train personal models
 - **Federated Learning**: Privacy-preserving collaborative training
+- **Active Learning**: Improve models with user corrections
+- **Real-time Species Tracking**: Track individual birds across audio segments
+
+#### 13.2.2 Development Roadmap
+
+```mermaid
+gantt
+    title SoundScape Enhancement Roadmap
+    dateFormat YYYY-MM
+    section Completed
+    Multi-Species Detection    :done, v2_0, 2025-12, 2026-02
+    ML Pipeline v5.0           :done, v5_0, 2025-12, 2026-02
+    Visual Rankings            :done, ui_v2, 2026-01, 2026-02
+    
+    section Short-term (3-6 months)
+    Spectrogram Visualization  :active, spec, 2026-02, 2026-04
+    Social Features            :social, 2026-03, 2026-05
+    Accessibility Improvements :a11y, 2026-04, 2026-06
+    
+    section Medium-term (6-12 months)
+    Custom Model Training      :train, 2026-05, 2026-08
+    Smart Watch App            :watch, 2026-06, 2026-09
+    Web Dashboard              :web, 2026-07, 2026-10
+    eBird Integration          :ebird, 2026-08, 2026-11
+    
+    section Long-term (1-2 years)
+    Migration Tracking         :migrate, 2026-10, 2027-04
+    Multi-modal Sensing        :multimodal, 2027-01, 2027-06
+    Global Expansion           :global, 2027-03, 2027-12
+```
 - **Active Learning**: Improve models with user corrections
 - **Real-time Species Tracking**: Track individual birds across audio segments
 
