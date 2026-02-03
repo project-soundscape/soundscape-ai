@@ -46,7 +46,7 @@ class LibraryView extends GetView<LibraryController> {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
               child: TextField(
                 onChanged: (val) => controller.searchQuery.value = val,
                 decoration: InputDecoration(
@@ -68,6 +68,54 @@ class LibraryView extends GetView<LibraryController> {
                   ),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 ),
+              ),
+            ),
+          ),
+          // Filter button
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Row(
+                children: [
+                  Obx(() => FilterChip(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.person,
+                          size: 16,
+                          color: controller.showOnlyMyRecordings.value ? Colors.white : Colors.teal,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'My Recordings',
+                          style: TextStyle(
+                            color: controller.showOnlyMyRecordings.value ? Colors.white : Colors.teal,
+                          ),
+                        ),
+                      ],
+                    ),
+                    selected: controller.showOnlyMyRecordings.value,
+                    onSelected: (_) => controller.toggleUserFilter(),
+                    selectedColor: Colors.teal,
+                    checkmarkColor: Colors.white,
+                    backgroundColor: isDark ? Colors.grey[800] : Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: controller.showOnlyMyRecordings.value ? Colors.teal : Colors.grey.shade300,
+                      ),
+                    ),
+                  )),
+                  const SizedBox(width: 8),
+                  Obx(() => Text(
+                    '${controller.filteredRecordings.length} recording(s)',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 13,
+                    ),
+                  )),
+                ],
               ),
             ),
           ),
@@ -264,7 +312,7 @@ class LibraryView extends GetView<LibraryController> {
                                             border: Border.all(color: Colors.green.withOpacity(0.3)),
                                           ),
                                           child: Text(
-                                            "${(recording.confidence! * 100).toInt()}%",
+                                            "${recording.confidence!.toInt()}%",
                                             style: const TextStyle(
                                               fontSize: 11,
                                               fontWeight: FontWeight.bold,

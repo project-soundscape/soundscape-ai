@@ -325,6 +325,20 @@ class DetailsController extends GetxController {
     }
   }
 
+  Future<void> reanalyzeRecording() async {
+    if (isUploading.value) return;
+    
+    isUploading.value = true;
+    try {
+      await _appwriteService.reanalyzeRecording(recording);
+      // Status update is handled by the service via realtime/local update
+    } catch (e) {
+      // Error handling is done in service mostly (snackbar)
+    } finally {
+      isUploading.value = false;
+    }
+  }
+
   Future<void> exportAudio() async {
     if (localFilePath == null) return;
     try {

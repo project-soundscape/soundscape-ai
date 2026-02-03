@@ -259,7 +259,7 @@ class MapView extends GetView<SoundMapController> {
                                         border: Border.all(color: Colors.green.withOpacity(0.3)),
                                       ),
                                       child: Text(
-                                        "${(rec.confidence! * 100).round()}%",
+                                        "${rec.confidence!.round()}%",
                                         style: TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.bold,

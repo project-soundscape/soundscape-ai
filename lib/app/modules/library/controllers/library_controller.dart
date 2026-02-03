@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../data/models/recording_model.dart';
 import '../../../data/services/storage_service.dart';
@@ -11,12 +12,31 @@ class LibraryController extends GetxController {
   final recordings = <Recording>[].obs;
   final RxBool isLoading = false.obs;
   final searchQuery = ''.obs;
+  final showOnlyMyRecordings = false.obs; // Filter toggle
 
   List<Recording> get filteredRecordings {
-    if (searchQuery.isEmpty) return recordings;
-    return recordings.where((rec) {
-      return (rec.commonName ?? '').toLowerCase().contains(searchQuery.value.toLowerCase());
-    }).toList();
+    List<Recording> results = recordings.toList();
+    
+    // Apply user filter
+    if (showOnlyMyRecordings.value) {
+      final currentUserId = _appwriteService.currentUserId;
+      if (currentUserId != null) {
+        results = results.where((rec) => rec.userId == currentUserId).toList();
+      }
+    }
+    
+    // Apply search filter
+    if (searchQuery.isNotEmpty) {
+      results = results.where((rec) {
+        return (rec.commonName ?? '').toLowerCase().contains(searchQuery.value.toLowerCase());
+      }).toList();
+    }
+    
+    return results;
+  }
+
+  void toggleUserFilter() {
+    showOnlyMyRecordings.value = !showOnlyMyRecordings.value;
   }
 
   @override
@@ -81,6 +101,19 @@ class LibraryController extends GetxController {
   }
 
   Future<void> deleteRecording(Recording recording) async {
+    // Check if user owns this recording
+    final currentUserId = _appwriteService.currentUserId;
+    if (currentUserId != null && recording.userId != null && recording.userId != currentUserId) {
+      Get.snackbar(
+        'Permission Denied',
+        'You can only delete your own recordings',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+    
     try {
       // Delete remote first
       await _appwriteService.deleteRecording(recording.id);

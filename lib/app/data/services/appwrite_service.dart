@@ -97,6 +97,8 @@ class AppwriteService extends GetxService {
     }
   }
 
+  String? get currentUserId => _userId;
+
   Future<void> updateName(String name) async {
     try {
       await account.updateName(name: name);
@@ -151,6 +153,7 @@ class AppwriteService extends GetxService {
           longitude: (data['longitude'] as num?)?.toDouble(),
           status: (data['status'] as String?)?.toLowerCase() ?? 'pending',
           streamUrl: data['streamUrl'] as String?,
+          userId: data['user-id'] as String?, // Store the user ID
         );
 
         try {
@@ -308,6 +311,79 @@ class AppwriteService extends GetxService {
       // 3. Listen for updates
       _listenForAnalysis(doc.$id, recording);
 
+    } catch (e) {
+      _handleUploadError(recording, e.toString());
+    }
+  }
+
+  // Force reanalyze a recording that already has results
+  Future<void> reanalyzeRecording(Recording recording) async {
+    if (_userId == null) {
+      throw Exception("User not authenticated. Please login.");
+    }
+
+    try {
+      // Check if document exists
+      await databases.getDocument(
+        databaseId: databaseId,
+        collectionId: recordingsCollectionId,
+        documentId: recording.id,
+      );
+      
+      // Delete existing detection documents for this recording
+      try {
+        final detections = await databases.listDocuments(
+          databaseId: databaseId,
+          collectionId: detectionsCollectionId,
+          queries: [Query.equal('recordings', recording.id)]
+        );
+        
+        for (var det in detections.documents) {
+          await databases.deleteDocument(
+            databaseId: databaseId,
+            collectionId: detectionsCollectionId,
+            documentId: det.$id,
+          );
+        }
+      } catch (e) {
+        print("Error deleting old detections: $e");
+      }
+      
+      // Reset status to QUEUED to trigger reanalysis
+      await databases.updateDocument(
+        databaseId: databaseId,
+        collectionId: recordingsCollectionId,
+        documentId: recording.id,
+        data: {'status': 'QUEUED'}
+      );
+      
+      // Update local recording
+      recording.status = 'uploaded';
+      recording.commonName = null;
+      recording.confidence = null;
+      recording.predictions = null;
+      await Get.find<StorageService>().updateRecording(recording);
+      
+      if(Get.context != null) {
+        ScaffoldMessenger.of(Get.context!).showSnackBar(
+          const SnackBar(
+            content: Text("🔄 Re-analyzing recording..."), 
+            backgroundColor: Colors.teal,
+            duration: Duration(seconds: 3),
+          )
+        );
+      }
+      
+      // Listen for new analysis results
+      _listenForAnalysis(recording.id, recording);
+      
+    } on AppwriteException catch (e) {
+      if (e.code == 404) {
+        // Document doesn't exist, call normal upload
+        await uploadRecording(recording);
+      } else {
+        _handleUploadError(recording, e.message ?? e.toString());
+      }
     } catch (e) {
       _handleUploadError(recording, e.toString());
     }

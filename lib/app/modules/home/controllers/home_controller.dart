@@ -161,14 +161,14 @@ class HomeController extends GetxController {
             child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
-            onPressed: () async {
+            onPressed: () {
               if (dontShowAgain) {
                 _storageService.showRecordingInstructions = false;
               }
-              // Use a small delay or ensure Get.back finishes before starting heavy async work
+              // Close dialog immediately
               Get.back();
-              await Future.delayed(const Duration(milliseconds: 100));
-              await _startRecording();
+              // Start recording after dialog closes (non-blocking)
+              Future.microtask(() => _startRecording());
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.teal,

@@ -94,7 +94,7 @@ class DetailsView extends GetView<DetailsController> {
                                 ),
                               ),
                               child: Text(
-                                '${(controller.recording.confidence! * 100).toInt()}%',
+                                '${controller.recording.confidence!.toInt()}%',
                                 style: const TextStyle(
                                   color: Colors.green,
                                   fontWeight: FontWeight.bold,
@@ -751,15 +751,21 @@ class DetailsView extends GetView<DetailsController> {
                 ),
 
               const SizedBox(height: 32),
+              // Submit or Re-analyze button
               SizedBox(
                 width: double.infinity,
-                child: Obx(
-                  () => ElevatedButton(
+                child: Obx(() {
+                  final isProcessed = controller.recording.status == 'processed';
+                  return ElevatedButton(
                     onPressed: controller.isUploading.value
                         ? null
-                        : controller.submitRecording,
+                        : isProcessed
+                            ? controller.reanalyzeRecording
+                            : controller.submitRecording,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF004D40),
+                      backgroundColor: isProcessed 
+                          ? const Color(0xFFFF8C00) // Orange for re-analyze
+                          : const Color(0xFF004D40), // Teal for initial submit
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -774,12 +780,23 @@ class DetailsView extends GetView<DetailsController> {
                               strokeWidth: 2,
                             ),
                           )
-                        : const Text(
-                            'Submit for Analysis',
-                            style: TextStyle(fontSize: 16, color: Colors.white),
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                isProcessed ? Icons.refresh : Icons.upload,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                isProcessed ? 'Re-analyze Recording' : 'Submit for Analysis',
+                                style: const TextStyle(fontSize: 16, color: Colors.white),
+                              ),
+                            ],
                           ),
-                  ),
-                ),
+                  );
+                }),
               ),
             ],
           ),

@@ -14,6 +14,7 @@ class Recording {
   String? notes;
   String? streamUrl;
   Map<String, double>? predictions;
+  String? userId; // Owner of the recording
 
   Recording({
     required this.id,
@@ -29,6 +30,7 @@ class Recording {
     this.notes,
     this.streamUrl,
     this.predictions,
+    this.userId,
   });
 
   Map<String, dynamic> toMap() {
@@ -46,6 +48,7 @@ class Recording {
       'notes': notes,
       'streamUrl': streamUrl,
       'predictions': predictions,
+      'userId': userId,
     };
   }
 
@@ -66,6 +69,7 @@ class Recording {
       predictions: map['predictions'] != null 
           ? Map<String, double>.from(map['predictions']) 
           : null,
+      userId: map['userId'],
     );
   }
 
