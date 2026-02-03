@@ -52,13 +52,31 @@ class DetailsView extends GetView<DetailsController> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Expanded(
-                            child: Text(
-                              controller.recording.commonName ??
-                                  'Processing...',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  controller.recording.commonName ??
+                                      'Processing...',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                if (controller.recording.predictions != null &&
+                                    controller.recording.predictions!.length > 1)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      '+${controller.recording.predictions!.length - 1} more species detected',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                           if (controller.recording.confidence != null)
@@ -99,8 +117,9 @@ class DetailsView extends GetView<DetailsController> {
                       const SizedBox(height: 20),
                       // Waveform
                       Container(
-                        height: 100,
+                        height: 150,
                         width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
                         decoration: BoxDecoration(
                           color: isDark ? Colors.black26 : Colors.grey[50],
                           borderRadius: BorderRadius.circular(12),
@@ -110,19 +129,62 @@ class DetailsView extends GetView<DetailsController> {
                                 : Colors.grey[200]!,
                           ),
                         ),
-                        child: AudioFileWaveforms(
-                          size: Size(
-                            MediaQuery.of(context).size.width - 80,
-                            100.0,
-                          ),
-                          playerController: controller.waveformController,
-                          enableSeekGesture: false,
-                          waveformType: WaveformType.fitWidth,
-                          playerWaveStyle: const PlayerWaveStyle(
-                            fixedWaveColor: Colors.teal,
-                            liveWaveColor: Colors.tealAccent,
-                            spacing: 6,
-                          ),
+                        child: Column(
+                          children: [
+                            AudioFileWaveforms(
+                              size: Size(
+                                MediaQuery.of(context).size.width - 80,
+                                100.0,
+                              ),
+                              playerController: controller.waveformController,
+                              enableSeekGesture: false,
+                              waveformType: WaveformType.fitWidth,
+                              playerWaveStyle: const PlayerWaveStyle(
+                                fixedWaveColor: Colors.teal,
+                                liveWaveColor: Colors.tealAccent,
+                                spacing: 6,
+                              ),
+                            ),
+                            // Detection Timeline Markers
+                            Obx(() {
+                              if (controller.timelineEvents.isEmpty) return const SizedBox(height: 20);
+                              
+                              final totalMs = controller.totalDuration.value.inMilliseconds > 0 
+                                  ? controller.totalDuration.value.inMilliseconds 
+                                  : controller.recording.duration.inMilliseconds;
+                              final width = MediaQuery.of(context).size.width - 80;
+                              
+                              return SizedBox(
+                                height: 20,
+                                width: width,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: controller.timelineEvents.map((e) {
+                                    final t = e['time'] as Duration;
+                                    final label = e['label'] as String;
+                                    final conf = e['confidence'] as double;
+                                    
+                                    if (totalMs == 0) return const SizedBox.shrink();
+                                    final pct = t.inMilliseconds / totalMs;
+                                    if (pct < 0 || pct > 1.0) return const SizedBox.shrink();
+                                    
+                                    return Positioned(
+                                      left: (width * pct) - 10, // Center the icon
+                                      child: Tooltip(
+                                        message: "$label (${(conf * 100).toInt()}%) @ ${t.inSeconds}s",
+                                        triggerMode: TooltipTriggerMode.tap,
+                                        child: Icon(
+                                          Icons.arrow_drop_up, 
+                                          size: 20, 
+                                          color: Colors.orange.withOpacity(0.8)
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              );
+                            })
+                          ],
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -285,7 +347,7 @@ class DetailsView extends GetView<DetailsController> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              isPlaying ? 'Live Analysis' : 'Analysis Results',
+                              isPlaying ? 'Live Analysis' : 'Species Detected',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
@@ -304,67 +366,174 @@ class DetailsView extends GetView<DetailsController> {
                               ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        ...displayPredictions.map((e) {
-                          final score = e.value;
-                          final isTop =
-                              e.key == controller.recording.commonName;
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12.0),
+                        
+                        // Detection Summary Bar
+                        if (!isPlaying && displayPredictions.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.grey[850] : Colors.grey[100],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                             child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
                               children: [
-                                SizedBox(
-                                  width: 100,
-                                  child: Text(
-                                    e.key,
-                                    style: TextStyle(
-                                      fontWeight: isTop
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
-                                      color: isTop
-                                          ? (isDark
-                                                ? Colors.white
-                                                : Colors.black87)
-                                          : Colors.grey,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                _buildStat(
+                                  icon: Icons.visibility,
+                                  label: 'Species',
+                                  value: '${displayPredictions.length}',
+                                  color: Colors.blue,
+                                  isDark: isDark,
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: TweenAnimationBuilder<double>(
+                                Container(
+                                  height: 30,
+                                  width: 1,
+                                  color: isDark ? Colors.grey[700] : Colors.grey[300],
+                                ),
+                                _buildStat(
+                                  icon: Icons.star,
+                                  label: 'Best Match',
+                                  value: '${(displayPredictions.first.value * 100).toInt()}%',
+                                  color: Colors.green,
+                                  isDark: isDark,
+                                ),
+                                Container(
+                                  height: 30,
+                                  width: 1,
+                                  color: isDark ? Colors.grey[700] : Colors.grey[300],
+                                ),
+                                _buildStat(
+                                  icon: Icons.check_circle,
+                                  label: 'Confidence',
+                                  value: displayPredictions.first.value >= 0.7 ? 'High' : 
+                                         displayPredictions.first.value >= 0.4 ? 'Medium' : 'Low',
+                                  color: displayPredictions.first.value >= 0.7 ? Colors.green :
+                                         displayPredictions.first.value >= 0.4 ? Colors.orange : Colors.red,
+                                  isDark: isDark,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        
+                        const SizedBox(height: 16),
+                        ...displayPredictions.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final e = entry.value;
+                          final score = e.value;
+                          final isTop = index == 0;
+                          
+                          // Use index-based ranking colors
+                          Color getColor() {
+                            if (isTop) return Colors.green;
+                            if (index == 1) return Colors.blue;
+                            if (index == 2) return Colors.orange;
+                            return Colors.grey;
+                          }
+                          
+                          // Medal icons for top 3
+                          Widget? getMedal() {
+                            if (index == 0) return const Icon(Icons.emoji_events, color: Colors.amber, size: 20);
+                            if (index == 1) return const Icon(Icons.emoji_events, color: Colors.grey, size: 18);
+                            if (index == 2) return const Icon(Icons.emoji_events, color: Color(0xFFCD7F32), size: 16);
+                            return null;
+                          }
+                          
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 16.0),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: isTop 
+                                  ? (isDark ? Colors.green.withOpacity(0.15) : Colors.green.withOpacity(0.08))
+                                  : (isDark ? Colors.grey[850] : Colors.grey[50]),
+                                borderRadius: BorderRadius.circular(12),
+                                border: isTop 
+                                  ? Border.all(color: Colors.green.withOpacity(0.3), width: 1.5)
+                                  : null,
+                              ),
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      if (getMedal() != null) ...[
+                                        getMedal()!,
+                                        const SizedBox(width: 8),
+                                      ],
+                                      Expanded(
+                                        child: Text(
+                                          e.key,
+                                          style: TextStyle(
+                                            fontWeight: isTop
+                                                ? FontWeight.bold
+                                                : FontWeight.w600,
+                                            fontSize: isTop ? 16 : 14,
+                                            color: isDark
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: getColor().withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: getColor().withOpacity(0.3),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          "${(score * 100).toInt()}%",
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: isTop ? 14 : 12,
+                                            color: getColor(),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TweenAnimationBuilder<double>(
                                     tween: Tween<double>(begin: 0, end: score),
-                                    duration: const Duration(milliseconds: 300),
+                                    duration: Duration(milliseconds: 300 + (index * 100)),
                                     curve: Curves.easeOutCubic,
                                     builder: (context, value, child) {
                                       return ClipRRect(
-                                        borderRadius: BorderRadius.circular(4),
+                                        borderRadius: BorderRadius.circular(8),
                                         child: LinearProgressIndicator(
                                           value: value,
                                           backgroundColor: isDark
                                               ? Colors.grey[800]
-                                              : Colors.grey[100],
-                                          color: isTop
-                                              ? Colors.teal
-                                              : Colors.grey[400],
-                                          minHeight: 10,
+                                              : Colors.grey[200],
+                                          color: getColor(),
+                                          minHeight: isTop ? 12 : 8,
                                         ),
                                       );
                                     },
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  "${(score * 100).toInt()}%",
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                              ],
+                                  if (isTop && !isPlaying) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Primary detection',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: isDark ? Colors.green[300] : Colors.green[700],
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
                             ),
                           );
-                        }),
+                        }).toList(),
                       ],
                     ),
                   ),
@@ -643,6 +812,38 @@ class DetailsView extends GetView<DetailsController> {
           ),
         ],
       ),
+    );
+  }
+
+  // Helper widget for detection statistics
+  static Widget _buildStat({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+    required bool isDark,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: isDark ? Colors.grey[400] : Colors.grey[600],
+          ),
+        ),
+      ],
     );
   }
 }

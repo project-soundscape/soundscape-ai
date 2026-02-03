@@ -38,6 +38,7 @@ class DetailsController extends GetxController {
   final RxBool isScanning = false.obs;
   final RxDouble scanProgress = 0.0.obs;
   final scanResults = <String, double>{}.obs;
+  final timelineEvents = <Map<String, dynamic>>[].obs;
 
   @override
   void onInit() {
@@ -121,6 +122,9 @@ class DetailsController extends GetxController {
            noOfSamples: 100,
            volume: 1.0,
          );
+         if (waveformController.maxDuration > 0) {
+            totalDuration.value = Duration(milliseconds: waveformController.maxDuration);
+         }
       }
     } catch (e) {
       print("Waveform Error: $e");
@@ -208,6 +212,7 @@ class DetailsController extends GetxController {
     isScanning.value = true;
     scanProgress.value = 0.0;
     scanResults.clear();
+    timelineEvents.clear();
     
     try {
       final int sampleRate = _analysisService.currentSampleRate;
@@ -245,6 +250,18 @@ class DetailsController extends GetxController {
           if (entry.value > (scanResults[entry.key] ?? 0)) {
             scanResults[entry.key] = entry.value;
           }
+        }
+        
+        // Populate Timeline Events
+        if (_analysisService.topPredictions.isNotEmpty) {
+           final top = _analysisService.topPredictions.first;
+           if (top.value > 0.45 && top.key != 'Silence' && top.key != 'Unknown') {
+             timelineEvents.add({
+               'time': Duration(milliseconds: (i * inputSize / sampleRate * 1000).toInt()),
+               'label': top.key,
+               'confidence': top.value
+             });
+           }
         }
         
         scanProgress.value = (i + 1) / totalSteps;

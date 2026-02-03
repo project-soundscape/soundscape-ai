@@ -291,6 +291,10 @@ class HomeController extends GetxController {
       final byteData = ByteData(samples.length * 2);
       for (int i = 0; i < samples.length; i++) {
         var s = samples[i];
+        
+        // Amplify Audio
+        s = s * 4.0; 
+
         if (s > 1.0) s = 1.0;
         if (s < -1.0) s = -1.0;
         final val = (s * 32767).toInt();

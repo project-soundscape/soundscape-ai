@@ -448,20 +448,27 @@ class AppwriteService extends GetxService {
           
           await Get.find<StorageService>().updateRecording(recording);
           
-          // Show local notification
+          // Show local notification with all species count
+          final speciesCount = scientificNames.length;
+          final notificationBody = speciesCount > 1
+              ? 'Identified: ${recording.commonName} + ${speciesCount - 1} more species'
+              : 'Identified: ${recording.commonName}';
+          
           Get.find<NotificationService>().showNotification(
             id: recording.id.hashCode,
             title: 'Analysis Complete',
-            body: 'Identified: ${recording.commonName}',
+            body: notificationBody,
             payload: recording.id,
           );
           
           if(Get.context != null) {
              ScaffoldMessenger.of(Get.context!).showSnackBar(
                SnackBar(
-                 content: Text("Analysis Complete: Identified ${recording.commonName}"), 
+                 content: Text(speciesCount > 1 
+                   ? "✨ ${speciesCount} species detected! Primary: ${recording.commonName}"
+                   : "Analysis Complete: Identified ${recording.commonName}"),
                  backgroundColor: Colors.green,
-                 duration: const Duration(seconds: 4),
+                 duration: const Duration(seconds: 5),
                )
              );
           }

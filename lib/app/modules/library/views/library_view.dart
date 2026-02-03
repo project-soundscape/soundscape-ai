@@ -192,11 +192,33 @@ class LibraryView extends GetView<LibraryController> {
                                       ),
                                     ],
                                   ),
-                                  title: Text(
-                                    recording.commonName ?? 'Unidentified Sound',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Theme.of(context).textTheme.bodyLarge?.color),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                  title: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        recording.commonName ?? 'Unidentified Sound',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold, 
+                                          fontSize: 16, 
+                                          color: Theme.of(context).textTheme.bodyLarge?.color
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      if (recording.predictions != null && 
+                                          recording.predictions!.length > 1)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 2),
+                                          child: Text(
+                                            '+${recording.predictions!.length - 1} more species',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.blue[700],
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                   subtitle: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,

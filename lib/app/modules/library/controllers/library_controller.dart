@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:get/get.dart';
 import '../../../data/models/recording_model.dart';
 import '../../../data/services/storage_service.dart';
@@ -41,6 +42,16 @@ class LibraryController extends GetxController {
       
       // 2. Sync remote to local storage (which will trigger the 'ever' listener)
       for (var rec in remote) {
+         // Check if we have a valid local file for this recording
+         // and preserve the path if so, to avoid overwriting with remote URL
+         final existing = _storageService.recordings.firstWhereOrNull((r) => r.id == rec.id);
+         if (existing != null && existing.isLocal) {
+            final file = File(existing.path);
+            if (await file.exists()) {
+               rec.path = existing.path;
+            }
+         }
+         
          await _storageService.updateRecording(rec);
       }
 
