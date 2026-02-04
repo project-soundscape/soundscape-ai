@@ -1,13 +1,16 @@
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'storage_service.dart';
+import 'noise_service.dart';
 
 class AudioAnalysisService extends GetxService {
   final StorageService _storage = Get.find<StorageService>();
+  final NoiseService _noiseService = Get.find<NoiseService>();
   
   Interpreter? _interpreter;
   Interpreter? _yamnetSpeechInterpreter; // Dedicated for speech detection
@@ -142,15 +145,50 @@ class AudioAnalysisService extends GetxService {
     }
   }
 
+  // Helper for running inference
+  List<double> _runInference(List<double> buffer) {
+    final input = Float32List.fromList(buffer).reshape([1, currentInputSize]);
+    var output = List<double>.filled(numClasses, 0).reshape([1, numClasses]);
+    _interpreter!.run(input, output);
+    return output[0];
+  }
+
+  // Pre-processing for denoising
+  List<double> _applyDenoise(List<double> input) {
+     // 1. RMS & Auto-Gain
+     double sum = 0;
+     for(var s in input) {
+       sum += s*s;
+     }
+     double rms = sqrt(sum / input.length);
+     
+     // Target RMS ~ 0.1 (-20dB). Max Gain 5x.
+     double gain = 1.0;
+     if (rms > 0.001) {
+       gain = (0.1 / rms).clamp(1.0, 5.0);
+     }
+     
+     // 2. Noise Gate
+     double noiseFloorDb = _noiseService.avgDb.value;
+     if (noiseFloorDb == 0) noiseFloorDb = 40; // Default floor
+     
+     // Threshold: Slightly below average noise
+     double threshold = pow(10, (noiseFloorDb - 105) / 20).toDouble();
+     
+     return input.map((s) {
+       double val = s * gain;
+       if (val.abs() < threshold) return 0.0;
+       return val;
+     }).toList();
+  }
+
   void analyze(List<double> buffer) {
     if (_interpreter == null || _labels.isEmpty) return;
     if (buffer.length < currentInputSize) return;
 
     try {
-      // 1. Run Main Identification Model
-      final input = Float32List.fromList(buffer.sublist(0, currentInputSize)).reshape([1, currentInputSize]);
-      var output = List<double>.filled(numClasses, 0).reshape([1, numClasses]);
-      _interpreter!.run(input, output);
+      // 1. Initial Inference
+      var output = _runInference(buffer.sublist(0, currentInputSize));
       
       // 2. Run Background Speech Detection (Always YAMNet)
       if (isPerch && _yamnetSpeechInterpreter != null) {
@@ -169,13 +207,39 @@ class AudioAnalysisService extends GetxService {
         }
       } else if (!isPerch) {
         // Main model is already YAMNet
-        speechConfidence.value = output[0][0];
+        speechConfidence.value = output[0];
       }
       
-      // 3. Update Predictions
+      // 3. Check if we should Enhance (Denoise + Re-run)
+      int topIndex = -1;
+      double topScore = -1.0;
+      for(int i=0; i<output.length; i++) {
+        if (output[i] > topScore) {
+          topScore = output[i];
+          topIndex = i;
+        }
+      }
+      String topLabel = (topIndex >= 0 && topIndex < _labels.length) ? _labels[topIndex] : "Unknown";
+
+      // If confidence > 0.6 and not Silence/Speech, try to enhance
+      if (topScore > 0.6 && topLabel != 'Silence' && topLabel != 'Speech') {
+         final processed = _applyDenoise(buffer.sublist(0, currentInputSize));
+         final output2 = _runInference(processed);
+         
+         double topScore2 = 0;
+         for(var s in output2) {
+           if(s > topScore2) topScore2 = s;
+         }
+         
+         if (topScore2 > topScore) {
+            output = output2; // Use improved result
+         }
+      }
+      
+      // 4. Update Predictions
       List<MapEntry<int, double>> scores = [];
       for(int i=0; i<numClasses; i++) {
-        scores.add(MapEntry(i, output[0][i]));
+        scores.add(MapEntry(i, output[i]));
       }
       
       scores.sort((a, b) => b.value.compareTo(a.value));

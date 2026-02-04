@@ -6,6 +6,7 @@ import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/material.dart'; 
 import 'package:url_launcher/url_launcher.dart';
+import 'package:appwrite/appwrite.dart';
 import '../../../data/models/recording_model.dart';
 import '../../../data/services/appwrite_service.dart';
 import '../../../data/services/storage_service.dart';
@@ -33,32 +34,112 @@ class DetailsController extends GetxController {
   Duration _lastAnalysisTime = const Duration(seconds: -1);
   
   // Species Info
-  final Rxn<Map<String, dynamic>> speciesData = Rxn();
+  final RxMap<String, Map<String, dynamic>> speciesData = <String, Map<String, dynamic>>{}.obs;
   final RxBool isLoadingWiki = false.obs;
   final RxBool isScanning = false.obs;
   final RxDouble scanProgress = 0.0.obs;
   final scanResults = <String, double>{}.obs;
   final timelineEvents = <Map<String, dynamic>>[].obs;
 
+  // Track requested species to prevent duplicate fetches
+  final Set<String> _requestedSpecies = {};
+
   @override
-  void onInit() {
+  void onInit() async {
     super.onInit();
     recording = Get.arguments as Recording;
     waveformController = PlayerController();
     _prepareFile();
     
-    if (recording.commonName != null) {
-      fetchSpeciesInfo(recording.commonName!);
+    // If processed but no predictions, fetch from Appwrite
+    if (recording.status == 'processed' && (recording.predictions == null || recording.predictions!.isEmpty)) {
+      await _fetchRemoteDetections();
+    }
+    
+    // No eager fetching here anymore. View calls resolveSpeciesInfo
+  }
+
+  // Called by View to lazily load data
+  void resolveSpeciesInfo(String name) {
+    if (name.isEmpty) return;
+    
+    // Check if we already have data or already requested it
+    if (speciesData.containsKey(name) || _requestedSpecies.contains(name)) {
+      return;
+    }
+
+    final lowerName = name.toLowerCase();
+    final invalidNames = {'silence', 'unknown', 'speech', 'music', 'human voice', 'background noise', 'unidentified bird'};
+    
+    if (invalidNames.contains(lowerName) || lowerName.contains('unidentified')) {
+      return; 
+    }
+    
+    _fetchSpeciesInfo(name);
+  }
+
+  Future<void> _fetchSpeciesInfo(String name) async {
+    _requestedSpecies.add(name);
+    // Don't set global isLoadingWiki = true, as it blocks other UI. 
+    // Just fetch silently and update map.
+    
+    try {
+      final data = await _wikiService.getBirdInfo(name);
+      if (data != null) {
+        speciesData[name] = data;
+      }
+    } catch (e) {
+      print("Error fetching wiki for $name: $e");
     }
   }
-  
-  Future<void> fetchSpeciesInfo(String scientificName) async {
-    isLoadingWiki.value = true;
-    final data = await _wikiService.getBirdInfo(scientificName);
-    if (data != null) {
-      speciesData.value = data;
+
+  Future<void> _fetchRemoteDetections() async {
+    try {
+      final result = await _appwriteService.databases.listDocuments(
+        databaseId: AppwriteService.databaseId,
+        collectionId: AppwriteService.detectionsCollectionId,
+        queries: [Query.equal('recordings', recording.id)]
+      );
+
+      if (result.documents.isNotEmpty) {
+        final detection = result.documents.first;
+        final names = detection.data['scientificName'] as List?;
+        final confs = detection.data['confidenceLevel'] as List?;
+
+        if (names != null && names.isNotEmpty) {
+          recording.commonName = names.first.toString();
+          if (confs != null && confs.isNotEmpty) {
+            recording.confidence = (confs.first as num).toDouble();
+            
+            final preds = <String, double>{};
+            for (int i = 0; i < names.length; i++) {
+              if (i < confs.length) {
+                preds[names[i].toString()] = (confs[i] as num).toDouble();
+              }
+            }
+            recording.predictions = preds;
+          }
+          // Update local storage too
+          Get.find<StorageService>().updateRecording(recording);
+        }
+      }
+    } catch (e) {
+      print("Details: Error fetching remote detections: $e");
     }
-    isLoadingWiki.value = false;
+  }
+
+  // Removed _refreshSpeciesWiki and fetchSpeciesInfos (batch)
+  
+  Future<void> sendToResearch() async {
+    // Placeholder for research submission logic
+    // In a real app, this would update a 'research_requested' flag in the database
+    Get.snackbar(
+      'Sent to Research',
+      'This recording has been flagged for expert review.',
+      backgroundColor: Colors.purple,
+      colorText: Colors.white,
+      icon: const Icon(Icons.science, color: Colors.white),
+    );
   }
 
   Future<void> launchURL(String url) async {

@@ -11,8 +11,11 @@ class WikiService extends GetConnect {
 
   Future<Map<String, dynamic>?> getBirdInfo(String scientificName) async {
     // Clean the species name: Extract only the scientific name part
-    // Format can be: "Fringilla coelebs_Зяблик" or "Fringilla coelebs" or "Common Name"
+    // Format can be: "Fringilla coelebs_Зяблик" or "Fringilla coelebs" or "Common Name" or "Common Name (ID: User)"
     String cleanedName = scientificName.trim();
+    
+    // Remove content in parentheses (e.g., user tags)
+    cleanedName = cleanedName.replaceAll(RegExp(r'\(.*?\)'), '').trim();
     
     // If contains underscore, take only the part before it (scientific name)
     if (cleanedName.contains('_')) {

@@ -153,11 +153,15 @@ class LibraryView extends GetView<LibraryController> {
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     final recording = controller.filteredRecordings[index];
+                    final isUnidentified = (recording.commonName ?? '').toLowerCase().contains('unidentified');
+                    
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Dismissible(
                         key: Key(recording.id),
-                        direction: DismissDirection.endToStart,
+                        direction: controller.canDeleteRecording(recording) 
+                            ? DismissDirection.endToStart 
+                            : DismissDirection.none,
                         background: Container(
                           alignment: Alignment.centerRight,
                           padding: const EdgeInsets.only(right: 20),
@@ -168,6 +172,16 @@ class LibraryView extends GetView<LibraryController> {
                           child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
                         ),
                         confirmDismiss: (direction) async {
+                          if (!controller.canDeleteRecording(recording)) {
+                            Get.snackbar(
+                              'Permission Denied',
+                              'You can only delete your own recordings',
+                              backgroundColor: Colors.red,
+                              colorText: Colors.white,
+                              snackPosition: SnackPosition.BOTTOM,
+                            );
+                            return false;
+                          }
                           return await showDialog(
                             context: context,
                             builder: (context) => AlertDialog(
@@ -195,11 +209,16 @@ class LibraryView extends GetView<LibraryController> {
                             color: Colors.transparent,
                             child: InkWell(
                               onTap: () => Get.toNamed(Routes.DETAILS, arguments: recording),
-                              onLongPress: () => _showRenameDialog(context, recording),
+                              onLongPress: (recording.commonName == null || 
+                                            recording.commonName!.toLowerCase().contains('unidentified')) 
+                                  ? () => _showRenameDialog(context, recording) 
+                                  : null,
                               borderRadius: BorderRadius.circular(16),
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: isDark ? Colors.grey[900] : Colors.white,
+                                  color: isDark 
+                                      ? (isUnidentified ? Colors.purple.withValues(alpha: 0.15) : Colors.grey[900])
+                                      : (isUnidentified ? Colors.purple.withValues(alpha: 0.05) : Colors.white),
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
@@ -208,6 +227,7 @@ class LibraryView extends GetView<LibraryController> {
                                       offset: const Offset(0, 4),
                                     ),
                                   ],
+                                  border: isUnidentified ? Border.all(color: Colors.purple.withValues(alpha: 0.3)) : null,
                                 ),
                                 child: ListTile(
                                   contentPadding: const EdgeInsets.all(16),
@@ -243,15 +263,39 @@ class LibraryView extends GetView<LibraryController> {
                                   title: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        recording.commonName ?? 'Unidentified Sound',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold, 
-                                          fontSize: 16, 
-                                          color: Theme.of(context).textTheme.bodyLarge?.color
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              recording.commonName ?? 'Unidentified Sound',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold, 
+                                                fontSize: 16, 
+                                                color: Theme.of(context).textTheme.bodyLarge?.color
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if (recording.userId != null && recording.userId == controller.currentUserId)
+                                            Container(
+                                              margin: const EdgeInsets.only(left: 8),
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: Colors.teal.withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(color: Colors.teal.withValues(alpha: 0.3)),
+                                              ),
+                                              child: const Text(
+                                                'Mine',
+                                                style: TextStyle(
+                                                  color: Colors.teal,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                       if (recording.predictions != null && 
                                           recording.predictions!.length > 1)

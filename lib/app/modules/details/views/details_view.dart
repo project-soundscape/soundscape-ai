@@ -500,24 +500,25 @@ class DetailsView extends GetView<DetailsController> {
                                     ],
                                   ),
                                   const SizedBox(height: 8),
-                                  TweenAnimationBuilder<double>(
-                                    tween: Tween<double>(begin: 0, end: score),
-                                    duration: Duration(milliseconds: 300 + (index * 100)),
-                                    curve: Curves.easeOutCubic,
-                                    builder: (context, value, child) {
-                                      return ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: LinearProgressIndicator(
-                                          value: value,
-                                          backgroundColor: isDark
-                                              ? Colors.grey[800]
-                                              : Colors.grey[200],
-                                          color: getColor(),
-                                          minHeight: isTop ? 12 : 8,
-                                        ),
-                                      );
-                                    },
-                                  ),
+                                  if (isPlaying)
+                                    TweenAnimationBuilder<double>(
+                                      tween: Tween<double>(begin: 0, end: score),
+                                      duration: Duration(milliseconds: 300 + (index * 100)),
+                                      curve: Curves.easeOutCubic,
+                                      builder: (context, value, child) {
+                                        return ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: LinearProgressIndicator(
+                                            value: value,
+                                            backgroundColor: isDark
+                                                ? Colors.grey[800]
+                                                : Colors.grey[200],
+                                            color: getColor(),
+                                            minHeight: isTop ? 12 : 8,
+                                          ),
+                                        );
+                                      },
+                                    ),
                                   if (isTop && !isPlaying) ...[
                                     const SizedBox(height: 8),
                                     Text(
@@ -540,9 +541,9 @@ class DetailsView extends GetView<DetailsController> {
                 );
               }),
 
-              // SPECIES INSIGHT CARD
+              // SPECIES LIST
               Obx(() {
-                if (controller.isLoadingWiki.value) {
+                if (controller.isLoadingWiki.value && controller.speciesData.isEmpty) {
                   return const Center(
                     child: Padding(
                       padding: EdgeInsets.all(20.0),
@@ -551,113 +552,162 @@ class DetailsView extends GetView<DetailsController> {
                   );
                 }
 
-                final info = controller.speciesData.value;
-                if (info == null) return const SizedBox.shrink();
+                // Gather and sort predictions
+                final predictions = controller.recording.predictions?.entries.toList() ?? [];
+                if (predictions.isEmpty && controller.recording.commonName != null) {
+                    predictions.add(MapEntry(controller.recording.commonName!, controller.recording.confidence ?? 1.0));
+                }
+                
+                predictions.sort((a, b) => b.value.compareTo(a.value));
+                final topSpecies = predictions.take(5).toList();
 
-                return Card(
-                  elevation: 2,
-                  color: isDark ? Colors.grey[900] : Colors.white,
-                  margin: const EdgeInsets.only(bottom: 24),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (info['imageUrl'] != null)
-                        SizedBox(
-                          height: 200,
-                          width: double.infinity,
-                          child: CachedNetworkImage(
-                            imageUrl: info['imageUrl'],
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) =>
-                                Container(color: Colors.grey[200]),
-                            errorWidget: (context, url, error) =>
-                                const Icon(Icons.image_not_supported),
+                if (topSpecies.isEmpty) return const SizedBox.shrink();
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Identified Species',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 16),
+                    ...topSpecies.map((entry) {
+                      final name = entry.key;
+                      final confidence = entry.value;
+                      
+                      // Trigger lazy load
+                      controller.resolveSpeciesInfo(name);
+                      
+                      final info = controller.speciesData[name];
+                      final isPrimary = entry == topSpecies.first;
+                      final isUnidentified = name.toLowerCase().contains('unidentified');
+
+                      return Card(
+                        elevation: isPrimary ? 2 : 0,
+                        color: isDark 
+                            ? (isUnidentified ? Colors.purple.withValues(alpha: 0.1) : (isPrimary ? Colors.grey[900] : Colors.transparent)) 
+                            : (isUnidentified ? Colors.purple.withValues(alpha: 0.05) : (isPrimary ? Colors.white : Colors.transparent)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: isUnidentified 
+                              ? BorderSide(color: Colors.purple.withValues(alpha: 0.3))
+                              : (isPrimary ? BorderSide.none : BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey[300]!)),
+                        ),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Image
+                                  Container(
+                                    width: 80,
+                                    height: 80,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      color: Colors.grey[200],
+                                      image: info != null && info['imageUrl'] != null
+                                          ? DecorationImage(
+                                              image: CachedNetworkImageProvider(info['imageUrl']),
+                                              fit: BoxFit.cover,
+                                            )
+                                          : null,
+                                    ),
+                                    child: info == null || info['imageUrl'] == null
+                                        ? Icon(isUnidentified ? Icons.help_outline : Icons.image_not_supported, color: Colors.grey)
+                                        : null,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  // Info
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                info?['title'] ?? name,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 16,
+                                                ),
+                                              ),
+                                            ),
+                                            if (isPrimary)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: isUnidentified ? Colors.purple : Colors.green,
+                                                  borderRadius: BorderRadius.circular(8),
+                                                ),
+                                                child: Text(isUnidentified ? 'Needs Review' : 'Primary', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                                              ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Confidence: ${(confidence * 100).toInt()}%',
+                                          style: TextStyle(
+                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        if (info?['description'] != null) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              info!['description'],
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[300] : Colors.grey[800]),
+                                            ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (isUnidentified) ...[
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () => controller.sendToResearch(),
+                                    icon: const Icon(Icons.science, size: 16),
+                                    label: const Text('Send to Research'),
+                                    style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.purple,
+                                        foregroundColor: Colors.white,
+                                        visualDensity: VisualDensity.compact,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                  ),
+                                ),
+                              ] else if (info?['pageUrl'] != null) ...[
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => controller.launchURL(info!['pageUrl']),
+                                    icon: const Icon(Icons.menu_book, size: 16),
+                                    label: const Text('Read on Wikipedia'),
+                                    style: OutlinedButton.styleFrom(
+                                        visualDensity: VisualDensity.compact,
+                                        side: BorderSide(color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                  ),
+                                ),
+                              ]
+                            ],
                           ),
                         ),
-                      Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              info['title'] ?? 'Unknown Bird',
-                              style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              info['description'] ??
-                                  'No description available.',
-                              style: TextStyle(
-                                color: isDark
-                                    ? Colors.grey[400]
-                                    : Colors.grey[700],
-                                height: 1.4,
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            const Text(
-                              'Real World Options',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: () =>
-                                        controller.launchURL(info['pageUrl']),
-                                    icon: const Icon(
-                                      Icons.menu_book_rounded,
-                                      size: 18,
-                                    ),
-                                    label: const Text('Wikipedia'),
-                                    style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 12,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: ElevatedButton.icon(
-                                    onPressed: () =>
-                                        controller.openEBird(info['title']),
-                                    icon: const Icon(Icons.explore, size: 18),
-                                    label: const Text('eBird'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF4CAF50),
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 12,
-                                      ),
-                                      elevation: 0,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                      );
+                    }),
+                  ],
                 );
               }),
 

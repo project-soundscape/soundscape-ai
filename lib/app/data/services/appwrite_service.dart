@@ -166,10 +166,26 @@ class AppwriteService extends GetxService {
            if (detResult.documents.isNotEmpty) {
              final det = detResult.documents.first;
              final names = det.data['scientificName'] as List?;
+             final confs = det.data['confidenceLevel'] as List?;
+             
              if (names != null && names.isNotEmpty) {
                rec.commonName = names.first.toString();
+               
+               if (confs != null) {
+                 final preds = <String, double>{};
+                 for (int i = 0; i < names.length; i++) {
+                   if (i < confs.length) {
+                     final name = names[i].toString();
+                     final conf = confs[i];
+                     if (conf is num) {
+                       preds[name] = conf.toDouble();
+                     }
+                   }
+                 }
+                 rec.predictions = preds;
+               }
              }
-             final confs = det.data['confidenceLevel'] as List?;
+             
              if (confs != null && confs.isNotEmpty) {
                rec.confidence = (confs.first as num).toDouble();
              }

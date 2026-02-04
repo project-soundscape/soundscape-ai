@@ -1,4 +1,4 @@
-import 'dart:developer';
+import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:get/get.dart';
@@ -18,12 +18,33 @@ class SplashController extends GetxController {
     // Add a small delay for branding visibility
     await Future.delayed(const Duration(seconds: 2));
 
-    var connectivityResult = await Connectivity().checkConnectivity();
-    if (connectivityResult.contains(ConnectivityResult.none)) {
+    // Check if we have actual internet connectivity
+    final hasInternet = await _checkInternetConnection();
+    if (!hasInternet) {
       print("Splash: Offline, going to Dashboard as guest");
       Get.offAllNamed(Routes.DASHBOARD);
     } else {
       await _checkAuth();
+    }
+  }
+
+  /// Check actual internet connectivity by pinging a reliable endpoint
+  Future<bool> _checkInternetConnection() async {
+    // First check network interface
+    var connectivityResult = await Connectivity().checkConnectivity();
+    if (connectivityResult.contains(ConnectivityResult.none)) {
+      return false;
+    }
+    
+    // Then verify actual internet access
+    try {
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 3));
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } on SocketException catch (_) {
+      return false;
+    } on Exception catch (_) {
+      return false;
     }
   }
 
@@ -44,8 +65,8 @@ class SplashController extends GetxController {
       }
     } catch (e) {
       print("Splash Error: $e");
-      // Fallback to login on error
-      Get.offAllNamed(Routes.LOGIN);
+      // Network error likely means offline - go to dashboard as guest
+      Get.offAllNamed(Routes.DASHBOARD);
     }
   }
 }

@@ -14,6 +14,8 @@ class LibraryController extends GetxController {
   final searchQuery = ''.obs;
   final showOnlyMyRecordings = false.obs; // Filter toggle
 
+  String? get currentUserId => _appwriteService.currentUserId;
+
   List<Recording> get filteredRecordings {
     List<Recording> results = recordings.toList();
     
@@ -37,6 +39,15 @@ class LibraryController extends GetxController {
 
   void toggleUserFilter() {
     showOnlyMyRecordings.value = !showOnlyMyRecordings.value;
+  }
+
+  /// Check if current user can delete this recording
+  bool canDeleteRecording(Recording recording) {
+    final currentUserId = _appwriteService.currentUserId;
+    // Allow delete if: user not logged in (local only), or recording has no userId, or user owns it
+    if (currentUserId == null) return true;
+    if (recording.userId == null) return true;
+    return recording.userId == currentUserId;
   }
 
   @override
@@ -132,10 +143,14 @@ class LibraryController extends GetxController {
   Future<void> editRecording(Recording recording, String newName) async {
     if (newName.isEmpty) return;
     try {
-      recording.commonName = newName;
+      final user = _appwriteService.currentUser.value;
+      final suffix = user?.name != null ? " (ID: ${user!.name})" : "";
+      final finalName = "$newName$suffix";
+      
+      recording.commonName = finalName;
       recordings.refresh();
       
-      await _appwriteService.updateRecordingMetadata(recording.id, newName);
+      await _appwriteService.updateRecordingMetadata(recording.id, finalName);
       await _storageService.updateRecording(recording);
       
       Get.snackbar('Updated', 'Recording renamed');
