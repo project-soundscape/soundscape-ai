@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../routes/app_pages.dart';
@@ -110,7 +109,7 @@ class HomeView extends GetView<HomeController> {
                                   BoxShadow(
                                     color: (controller.isRecording.value 
                                       ? (isUnderMin ? Colors.grey : Colors.redAccent) 
-                                      : Colors.teal).withOpacity(0.4),
+                                      : Colors.teal).withValues(alpha: 0.4),
                                     blurRadius: 20,
                                     spreadRadius: 5,
                                   )
@@ -259,7 +258,7 @@ class HomeView extends GetView<HomeController> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         )

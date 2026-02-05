@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../routes/app_pages.dart';
-import '../../../data/services/model_download_service.dart';
 import '../controllers/settings_controller.dart';
 
 import 'edit_profile_view.dart';
@@ -90,6 +89,13 @@ class SettingsView extends GetView<SettingsController> {
                       controller.showRecordingInstructions,
                       (val) => controller.toggleRecordingInstructions(val),
                     ),
+                    _buildDivider(isDark),
+                    _buildSwitchTile(
+                      'Use Compass',
+                      Icons.explore_outlined,
+                      controller.useCompass,
+                      (val) => controller.toggleCompass(val),
+                    ),
                   ]),
                   const SizedBox(height: 24),
                   _buildSectionTitle('Intelligence'),
@@ -118,7 +124,7 @@ class SettingsView extends GetView<SettingsController> {
                   _buildSectionTitle('Diagnostics'),
                   _buildSettingsCard(context, [
                     _buildActionTile(
-                      'YAMNet Checker',
+                      'Acoustic Monitor',
                       Icons.analytics_outlined,
                       () => Get.toNamed(Routes.YAMNET_CHECKER),
                     ),
@@ -228,7 +234,7 @@ class SettingsView extends GetView<SettingsController> {
         ),
         child: Icon(icon, color: Colors.teal),
       ),
-      activeColor: Colors.teal,
+      activeThumbColor: Colors.teal,
     ));
   }
 
@@ -274,7 +280,7 @@ class SettingsView extends GetView<SettingsController> {
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.teal.withOpacity(0.1),
+            color: Colors.teal.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: const Icon(Icons.memory, color: Colors.teal),
@@ -287,7 +293,6 @@ class SettingsView extends GetView<SettingsController> {
   }
 
   Widget _buildModelList(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       children: [
         // Standard YAMNet (Built-in)
@@ -310,8 +315,6 @@ class SettingsView extends GetView<SettingsController> {
   }
 
   Widget _buildModelItem(BuildContext context, String name, String desc, String id, {bool isBuiltIn = false}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
     return Obx(() {
       final isDownloaded = controller.downloadedModels.contains(id) || isBuiltIn;
       final isActive = controller.activeModelId.value == id;
@@ -321,7 +324,7 @@ class SettingsView extends GetView<SettingsController> {
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isActive ? Colors.teal.withOpacity(0.05) : Colors.transparent,
+          color: isActive ? Colors.teal.withValues(alpha: 0.05) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(

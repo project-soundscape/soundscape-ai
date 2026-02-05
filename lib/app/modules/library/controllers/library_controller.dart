@@ -4,15 +4,22 @@ import 'package:get/get.dart';
 import '../../../data/models/recording_model.dart';
 import '../../../data/services/storage_service.dart';
 import '../../../data/services/appwrite_service.dart';
+import '../../../data/services/wiki_service.dart';
 
 class LibraryController extends GetxController {
   final StorageService _storageService = Get.find<StorageService>();
   final AppwriteService _appwriteService = Get.find<AppwriteService>();
+  final WikiService _wikiService = Get.find<WikiService>();
   
   final recordings = <Recording>[].obs;
   final RxBool isLoading = false.obs;
   final searchQuery = ''.obs;
   final showOnlyMyRecordings = false.obs; // Filter toggle
+
+  // Lightweight image cache
+  final speciesImages = <String, String>{}.obs;
+  final _loadingSpecies = <String>{};
+  final _failedSpecies = <String>{};
 
   String? get currentUserId => _appwriteService.currentUserId;
 
@@ -50,6 +57,51 @@ class LibraryController extends GetxController {
     return recording.userId == currentUserId;
   }
 
+  /// Lazy load species info for a specific recording
+  Future<void> resolveSpeciesInfo(String? name) async {
+    if (name == null || name.isEmpty) return;
+    if (speciesImages.containsKey(name) || _loadingSpecies.contains(name) || _failedSpecies.contains(name)) return;
+
+    final lowerName = name.toLowerCase();
+    final invalidNames = {'silence', 'unknown', 'speech', 'music', 'human voice', 'background noise', 'unidentified bird'};
+    if (invalidNames.contains(lowerName) || lowerName.contains('unidentified')) {
+      _failedSpecies.add(name);
+      return;
+    }
+
+    _loadingSpecies.add(name);
+    try {
+      final img = await _wikiService.getBirdImage(name);
+      if (img != null) {
+        speciesImages[name] = img;
+      } else {
+        _failedSpecies.add(name);
+      }
+    } catch (_) {
+      _failedSpecies.add(name);
+    } finally {
+      _loadingSpecies.remove(name);
+    }
+  }
+
+  /// Batch load images for visible items
+  void refreshVisibleImages(int firstIndex, int lastIndex) async {
+    final items = filteredRecordings;
+    if (items.isEmpty) return;
+    
+    final start = firstIndex.clamp(0, items.length - 1);
+    final end = lastIndex.clamp(0, items.length - 1);
+    
+    for (int i = start; i <= end; i++) {
+      final name = items[i].commonName;
+      if (name != null && !speciesImages.containsKey(name) && !_loadingSpecies.contains(name)) {
+        resolveSpeciesInfo(name);
+        // Small delay to prevent network congestion
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+    }
+  }
+
   @override
   void onInit() {
     super.onInit();
@@ -71,10 +123,8 @@ class LibraryController extends GetxController {
       // 1. Fetch Remote
       final remote = await _appwriteService.getUserRecordings();
       
-      // 2. Sync remote to local storage (which will trigger the 'ever' listener)
+      // 2. Sync remote to local storage
       for (var rec in remote) {
-         // Check if we have a valid local file for this recording
-         // and preserve the path if so, to avoid overwriting with remote URL
          final existing = _storageService.recordings.firstWhereOrNull((r) => r.id == rec.id);
          if (existing != null && existing.isLocal) {
             final file = File(existing.path);
@@ -82,23 +132,23 @@ class LibraryController extends GetxController {
                rec.path = existing.path;
             }
          }
-         
+         // updateRecording already triggers a refresh, but we're doing it in a loop
          await _storageService.updateRecording(rec);
       }
 
-      // 3. Sync Deletions: Remove local items that are missing from remote
-      // Only remove items that were successfully uploaded/processed
+      // 3. Sync Deletions
       final localRecordings = _storageService.getRecordings();
       final remoteIds = remote.map((e) => e.id).toSet();
       
       for (var local in localRecordings) {
         if ((local.status == 'uploaded' || local.status == 'processed') && 
             !remoteIds.contains(local.id)) {
-           print("Library: Syncing deletion for ${local.id}");
            await _storageService.deleteRecording(local.id);
         }
       }
-
+      
+      // If we deleted anything, local storage will have updated its observable, 
+      // which triggers our 'ever' listener.
     } catch (e) {
       print("Library: Error loading recordings: $e");
     } finally {

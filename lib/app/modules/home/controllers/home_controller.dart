@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
@@ -110,6 +109,10 @@ class HomeController extends GetxController {
 
   Future<void> toggleRecording() async {
     if (isRecording.value) {
+      if (globalDuration.value.inSeconds < 15) {
+        _showError('Keep recording! Minimum 15 seconds required.', isInfo: true);
+        return;
+      }
       await _stopRecording();
     } else {
       if (_storageService.showRecordingInstructions) {
@@ -188,7 +191,7 @@ class HomeController extends GetxController {
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: Colors.teal.withOpacity(0.7)),
+          Icon(icon, size: 20, color: Colors.teal.withValues(alpha: 0.7)),
           const SizedBox(width: 12),
           Expanded(child: Text(text, style: const TextStyle(fontSize: 14))),
         ],
@@ -341,11 +344,6 @@ class HomeController extends GetxController {
         await _currentFile!.delete();
       }
       return;
-    }
-      
-    // Validation: Check duration
-    if (globalDuration.value.inSeconds < 15) {
-      _showError('Recording must be at least 15 seconds', isInfo: true);
     }
       
     isCompletedRecording.value = true;

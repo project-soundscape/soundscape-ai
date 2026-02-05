@@ -237,6 +237,13 @@
                     "min": 0,
                     "max": 2147483647,
                     "default": 0
+                },
+                {
+                    "key": "researchRequested",
+                    "type": "boolean",
+                    "required": false,
+                    "array": false,
+                    "default": false
                 }
             ],
             "indexes": []

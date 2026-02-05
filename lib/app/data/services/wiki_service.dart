@@ -9,7 +9,7 @@ class WikiService extends GetConnect {
     return this;
   }
 
-  Future<Map<String, dynamic>?> getBirdInfo(String scientificName) async {
+  Future<Map<String, dynamic>?> getBirdInfo(String scientificName, {String languageCode = 'en'}) async {
     // Clean the species name: Extract only the scientific name part
     // Format can be: "Fringilla coelebs_Зяблик" or "Fringilla coelebs" or "Common Name" or "Common Name (ID: User)"
     String cleanedName = scientificName.trim();
@@ -24,17 +24,18 @@ class WikiService extends GetConnect {
     
     // Replace spaces with underscores for Wikipedia URL
     final pageTitle = cleanedName.replaceAll(' ', '_');
+    final cacheKey = "${languageCode}_$pageTitle";
     
     // 1. Check Local Cache
-    if (_cacheBox.containsKey(pageTitle)) {
-      final cachedData = _cacheBox.get(pageTitle);
+    if (_cacheBox.containsKey(cacheKey)) {
+      final cachedData = _cacheBox.get(cacheKey);
       if (cachedData != null) {
         return Map<String, dynamic>.from(cachedData);
       }
     }
 
     // 2. Fetch Remote
-    final url = 'https://en.wikipedia.org/api/rest_v1/page/summary/$pageTitle';
+    final url = 'https://$languageCode.wikipedia.org/api/rest_v1/page/summary/$pageTitle';
 
     try {
       final response = await get(
@@ -62,7 +63,7 @@ class WikiService extends GetConnect {
       };
 
       // 3. Save to Cache
-      await _cacheBox.put(pageTitle, data);
+      await _cacheBox.put(cacheKey, data);
 
       return data;
     } catch (e) {

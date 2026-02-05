@@ -154,6 +154,7 @@ class AppwriteService extends GetxService {
           status: (data['status'] as String?)?.toLowerCase() ?? 'pending',
           streamUrl: data['streamUrl'] as String?,
           userId: data['user-id'] as String?, // Store the user ID
+          researchRequested: data['researchRequested'] ?? false,
         );
 
         try {
@@ -306,6 +307,7 @@ class AppwriteService extends GetxService {
           'longitude': recording.longitude,
           'duration': recording.duration.inSeconds,
           'user-id': _userDocExists ? _userId : null, 
+          'researchRequested': recording.researchRequested,
         },
         permissions: [
           Permission.read(Role.user(_userId!)),
@@ -643,6 +645,22 @@ class AppwriteService extends GetxService {
        }
     } catch (e) {
       print("Appwrite: Error updating metadata: $e");
+    }
+  }
+
+  Future<void> updateResearchStatus(String docId, bool requested) async {
+    try {
+      await databases.updateDocument(
+        databaseId: databaseId,
+        collectionId: recordingsCollectionId,
+        documentId: docId,
+        data: {
+          'researchRequested': requested
+        }
+      );
+    } catch (e) {
+      print("Appwrite: Error updating research status: $e");
+      // Silently fail if document doesn't exist yet on remote
     }
   }
 

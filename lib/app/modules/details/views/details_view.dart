@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../routes/app_pages.dart';
+import '../../../utils/datetime_extensions.dart';
 import '../controllers/details_controller.dart';
 import '../../map/providers/persistent_tile_provider.dart';
 
@@ -87,10 +87,10 @@ class DetailsView extends GetView<DetailsController> {
                               ),
                               margin: const EdgeInsets.only(right: 8),
                               decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.1),
+                                color: Colors.green.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color: Colors.green.withOpacity(0.3),
+                                  color: Colors.green.withValues(alpha: 0.3),
                                 ),
                               ),
                               child: Text(
@@ -176,7 +176,7 @@ class DetailsView extends GetView<DetailsController> {
                                         child: Icon(
                                           Icons.arrow_drop_up, 
                                           size: 20, 
-                                          color: Colors.orange.withOpacity(0.8)
+                                          color: Colors.orange.withValues(alpha: 0.8)
                                         ),
                                       ),
                                     );
@@ -279,8 +279,8 @@ class DetailsView extends GetView<DetailsController> {
 
                 return Card(
                   elevation: 0,
-                  color: isDark ? Colors.grey[900] : Colors.orange[50]?.withOpacity(0.3),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: BorderSide(color: Colors.orange.withOpacity(0.2))),
+                  color: isDark ? Colors.grey[900] : Colors.orange[50]?.withValues(alpha: 0.3),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: BorderSide(color: Colors.orange.withValues(alpha: 0.2))),
                   margin: const EdgeInsets.only(bottom: 24),
                   child: Padding(
                     padding: const EdgeInsets.all(20.0),
@@ -322,8 +322,9 @@ class DetailsView extends GetView<DetailsController> {
                 // Otherwise fallback to static predictions from the recording object
                 final bool useLive = livePredictions.isNotEmpty;
 
-                if (!useLive && !hasStaticPredictions)
+                if (!useLive && !hasStaticPredictions) {
                   return const SizedBox.shrink();
+                }
 
                 final List<MapEntry<String, double>> displayPredictions =
                     useLive
@@ -354,6 +355,43 @@ class DetailsView extends GetView<DetailsController> {
                                 color: isDark ? Colors.tealAccent : Colors.teal,
                               ),
                             ),
+                            const Spacer(),
+                            // Model Selector
+                            Obx(() => Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              decoration: BoxDecoration(
+                                color: isDark ? Colors.grey[850] : Colors.grey[100],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: controller.activeModelId.value,
+                                  icon: const Icon(Icons.psychology, size: 16, color: Colors.teal),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDark ? Colors.white : Colors.black87,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  onChanged: (String? newValue) {
+                                    if (newValue != null) {
+                                      controller.switchModel(newValue);
+                                    }
+                                  },
+                                  items: [
+                                    const DropdownMenuItem<String>(
+                                      value: 'yamnet',
+                                      child: Text('YAMNet (General)'),
+                                    ),
+                                    ...controller.availableModels
+                                        .where((m) => controller.downloadedModels.contains(m.id))
+                                        .map((m) => DropdownMenuItem<String>(
+                                      value: m.id,
+                                      child: Text(m.name),
+                                    )),
+                                  ],
+                                ),
+                              ),
+                            )),
                             if (isPlaying)
                               Container(
                                 width: 12,
@@ -445,11 +483,11 @@ class DetailsView extends GetView<DetailsController> {
                             child: Container(
                               decoration: BoxDecoration(
                                 color: isTop 
-                                  ? (isDark ? Colors.green.withOpacity(0.15) : Colors.green.withOpacity(0.08))
+                                  ? (isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green.withValues(alpha: 0.08))
                                   : (isDark ? Colors.grey[850] : Colors.grey[50]),
                                 borderRadius: BorderRadius.circular(12),
                                 border: isTop 
-                                  ? Border.all(color: Colors.green.withOpacity(0.3), width: 1.5)
+                                  ? Border.all(color: Colors.green.withValues(alpha: 0.3), width: 1.5)
                                   : null,
                               ),
                               padding: const EdgeInsets.all(12),
@@ -482,10 +520,10 @@ class DetailsView extends GetView<DetailsController> {
                                           vertical: 4,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: getColor().withOpacity(0.15),
+                                          color: getColor().withValues(alpha: 0.15),
                                           borderRadius: BorderRadius.circular(12),
                                           border: Border.all(
-                                            color: getColor().withOpacity(0.3),
+                                            color: getColor().withValues(alpha: 0.3),
                                           ),
                                         ),
                                         child: Text(
@@ -566,9 +604,42 @@ class DetailsView extends GetView<DetailsController> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Identified Species',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Identified Species',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        // Language Selector
+                        Obx(() => Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.grey[850] : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: controller.selectedLanguage.value,
+                              icon: const Icon(Icons.language, size: 16, color: Colors.teal),
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: isDark ? Colors.white : Colors.black87,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              onChanged: (String? newValue) {
+                                controller.changeLanguage(newValue);
+                              },
+                              items: controller.languages.map<DropdownMenuItem<String>>((Map<String, String> lang) {
+                                return DropdownMenuItem<String>(
+                                  value: lang['code'],
+                                  child: Text(lang['name']!),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        )),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     ...topSpecies.map((entry) {
@@ -578,19 +649,19 @@ class DetailsView extends GetView<DetailsController> {
                       // Trigger lazy load
                       controller.resolveSpeciesInfo(name);
                       
-                      final info = controller.speciesData[name];
+                      final info = controller.speciesData["${controller.selectedLanguage.value}_$name"];
                       final isPrimary = entry == topSpecies.first;
                       final isUnidentified = name.toLowerCase().contains('unidentified');
 
                       return Card(
                         elevation: isPrimary ? 2 : 0,
                         color: isDark 
-                            ? (isUnidentified ? Colors.purple.withValues(alpha: 0.1) : (isPrimary ? Colors.grey[900] : Colors.transparent)) 
-                            : (isUnidentified ? Colors.purple.withValues(alpha: 0.05) : (isPrimary ? Colors.white : Colors.transparent)),
+                            ? (isUnidentified ? Colors.purple.withValues(alpha: 0.15) : (isPrimary ? Colors.grey[900] : Colors.transparent)) 
+                            : (isUnidentified ? Colors.purple.withValues(alpha: 0.08) : (isPrimary ? Colors.white : Colors.transparent)),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                           side: isUnidentified 
-                              ? BorderSide(color: Colors.purple.withValues(alpha: 0.3))
+                              ? BorderSide(color: Colors.purple.withValues(alpha: 0.4), width: 1.5)
                               : (isPrimary ? BorderSide.none : BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey[300]!)),
                         ),
                         margin: const EdgeInsets.only(bottom: 16),
@@ -608,7 +679,9 @@ class DetailsView extends GetView<DetailsController> {
                                     height: 80,
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(12),
-                                      color: Colors.grey[200],
+                                      color: isUnidentified 
+                                          ? Colors.purple.withValues(alpha: 0.1)
+                                          : Colors.grey[200],
                                       image: info != null && info['imageUrl'] != null
                                           ? DecorationImage(
                                               image: CachedNetworkImageProvider(info['imageUrl']),
@@ -617,7 +690,8 @@ class DetailsView extends GetView<DetailsController> {
                                           : null,
                                     ),
                                     child: info == null || info['imageUrl'] == null
-                                        ? Icon(isUnidentified ? Icons.help_outline : Icons.image_not_supported, color: Colors.grey)
+                                        ? Icon(isUnidentified ? Icons.flutter_dash : Icons.image_not_supported, 
+                                            color: isUnidentified ? Colors.purple : Colors.grey)
                                         : null,
                                   ),
                                   const SizedBox(width: 16),
@@ -641,10 +715,10 @@ class DetailsView extends GetView<DetailsController> {
                                               Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                                 decoration: BoxDecoration(
-                                                  color: isUnidentified ? Colors.purple : Colors.green,
+                                                  color: isUnidentified ? Colors.purpleAccent : Colors.green,
                                                   borderRadius: BorderRadius.circular(8),
                                                 ),
-                                                child: Text(isUnidentified ? 'Needs Review' : 'Primary', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                                                child: Text(isUnidentified ? 'Needs Review' : 'Primary', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                                               ),
                                           ],
                                         ),
@@ -672,20 +746,60 @@ class DetailsView extends GetView<DetailsController> {
                               ),
                               if (isUnidentified) ...[
                                 const SizedBox(height: 12),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    onPressed: () => controller.sendToResearch(),
-                                    icon: const Icon(Icons.science, size: 16),
-                                    label: const Text('Send to Research'),
-                                    style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.purple,
-                                        foregroundColor: Colors.white,
-                                        visualDensity: VisualDensity.compact,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                Obx(() {
+                                  if (controller.isSentToResearch.value) {
+                                    return Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.purple.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.check_circle, color: Colors.purple, size: 16),
+                                          SizedBox(width: 8),
+                                          Text('Sent to Research', style: TextStyle(color: Colors.purple, fontWeight: FontWeight.bold, fontSize: 12)),
+                                        ],
+                                      ),
+                                    );
+                                  }
+                                  
+                                  if (!controller.isOnline.value) {
+                                    return Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.wifi_off, color: Colors.grey[600], size: 16),
+                                          const SizedBox(width: 8),
+                                          Text('Offline: Cannot send to research', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                                        ],
+                                      ),
+                                    );
+                                  }
+
+                                  return SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      onPressed: () => controller.sendToResearch(),
+                                      icon: const Icon(Icons.science, size: 16),
+                                      label: const Text('Send to Research'),
+                                      style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.purple,
+                                          foregroundColor: Colors.white,
+                                          visualDensity: VisualDensity.compact,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
                                     ),
-                                  ),
-                                ),
+                                  );
+                                }),
                               ] else if (info?['pageUrl'] != null) ...[
                                 const SizedBox(height: 12),
                                 SizedBox(
@@ -727,7 +841,7 @@ class DetailsView extends GetView<DetailsController> {
                 context,
                 'Date & time',
                 DateFormat.yMMMd().add_jm().format(
-                  controller.recording.timestamp,
+                  controller.recording.timestamp.toIST(),
                 ),
               ),
               _buildMetaItem(
@@ -874,7 +988,7 @@ class DetailsView extends GetView<DetailsController> {
             style: TextStyle(
               color: Theme.of(
                 context,
-              ).textTheme.bodyMedium?.color?.withOpacity(0.7),
+              ).textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
             ),
           ),
         ],

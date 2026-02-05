@@ -230,6 +230,7 @@ graph TB
         Storage["Storage<br/>Service"]
         Noise["Noise<br/>Service"]
         Sync["Sync<br/>Service"]
+        Evo["EvolutionAPI<br/>Service"]
     end
     
     subgraph DL["DATA LAYER"]
@@ -466,9 +467,19 @@ logger: ^2.6.2                  # Logging utility
 uuid: ^4.5.2                    # UUID generation
 intl: ^0.20.2                   # Internationalization
 share_plus: ^12.0.1             # Share functionality
+path: ^1.9.0                    # Path manipulation
+url_launcher: ^6.3.1            # Launching external URLs
 cached_network_image: ^3.4.1    # Image caching
 flutter_local_notifications: ^18.0.1  # Push notifications
 ```
+
+#### 6.2.11 Research & Communication
+- **Evolution API Integration**: Enables automated WhatsApp communication
+- **Capabilities**:
+  - Send structured metadata text
+  - Send audio messages (WhatsApp Audio)
+  - Send raw audio documents (.wav)
+  - Resolve group JIDs from invite codes
 
 ### 6.3 Development Tools
 
@@ -1620,6 +1631,9 @@ class Recording extends HiveObject {
   
   @HiveField(17)
   bool isVerified;              // Manual verification
+  
+  @HiveField(18)
+  bool researchRequested;       // WhatsApp research submission status
 }
 ```
 
@@ -3472,6 +3486,40 @@ Response:
 
 ---
 
+## 16. Recent Updates (February 2026)
+
+### 16.1 WhatsApp Research Integration
+SoundScape now features direct integration with the **Evolution API** to facilitate ecological research:
+- **Direct Submission**: Users can send recordings to a dedicated WhatsApp research group.
+- **Rich Metadata**: Submissions include recording ID, duration, timestamp (IST), GPS location, and top 5 species predictions.
+- **Dual Format**: Audio is sent both as a native WhatsApp audio message (for quick listening) and a raw WAV document (for high-fidelity analysis).
+- **Status Tracking**: The system tracks `researchRequested` status locally and on Appwrite to prevent duplicate submissions.
+
+### 16.2 Multilingual Wikipedia Support
+The species information system has been expanded to support diverse linguistic needs:
+- **Languages**: Full support for **English**, **Malayalam (മലയാളം)**, and **Hindi (हिन्दी)**.
+- **Language Selector**: Users can switch languages directly from the Details page.
+- **Language-Aware Caching**: Wikipedia data is cached specifically for each language/species combination to ensure accuracy and speed.
+
+### 16.3 Performance & Lazy Loading
+- **Map & Library Optimization**: Recording metadata loads first from Appwrite/Local DB, followed by a "slow and simple" lazy loading of Wikipedia images and data.
+- **Background Fetching**: Wiki data is fetched with staggered delays (300-500ms) to ensure UI responsiveness and avoid API rate limits.
+
+### 16.4 Enhanced Recording Reliability
+- **Minimum Duration**: A strict 15-second minimum recording duration is enforced before analysis can be triggered.
+- **UI Guidance**: The recording button provides visual feedback (grey state) if the duration is insufficient.
+
+### 16.5 Global Timezone Support (IST)
+- **Timezone Transition**: All displayed timestamps across the application (Library, Map, Details, and Metadata) are now normalized to **UTC +5:30 (Indian Standard Time)**.
+- **Technical Implementation**: A custom `DateTimeExtension` provides the `.toIST()` method for consistent timezone shifting.
+
+### 16.6 Compass & Sensor Optimization
+- **Intelligent Tracking**: The compass sensor is now active only when the Map tab is selected, significantly reducing battery consumption and background log spam.
+- **User Control**: Added a "Use Compass" toggle in Settings, allowing users to disable directional features if their device hardware is unreliable.
+- **Accuracy Monitoring**: The system now monitors compass accuracy in real-time and provides a visual calibration guide when necessary.
+
+---
+
 ## Conclusion
 
 SoundScape v2.0.0 represents a major leap forward in bioacoustic monitoring, combining state-of-the-art multi-model machine learning, advanced temporal smoothing algorithms, and intuitive multi-species visualization. By democratizing bird identification and ecological research, SoundScape empowers citizen scientists to contribute meaningfully to biodiversity conservation efforts.
@@ -3505,10 +3553,10 @@ As the project evolves, SoundScape aims to become the de facto standard for comm
 
 ---
 
-**Document Version**: 2.0  
-**Application Version**: 2.0.0+1  
-**API Version**: 5.0.0  
-**Last Updated**: February 3, 2026  
+**Document Version**: 2.1  
+**Application Version**: 2.1.0+1  
+**API Version**: 6.1.0  
+**Last Updated**: February 5, 2026  
 **Prepared By**: SoundScape Development Team  
 **Contact**: support@soundscape.app  
 **Website**: https://soundscape.app  

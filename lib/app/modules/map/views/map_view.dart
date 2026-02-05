@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
 import '../../../routes/app_pages.dart';
+import '../../../utils/datetime_extensions.dart';
 import '../controllers/map_controller.dart';
 import '../providers/persistent_tile_provider.dart';
 
@@ -72,7 +73,7 @@ class MapView extends GetView<SoundMapController> {
           const SizedBox(width: 4),
         ],
       ),
-      body: Obx(() => Stack(
+      body: Stack(
         children: [
           FlutterMap(
             mapController: controller.mapController,
@@ -89,7 +90,7 @@ class MapView extends GetView<SoundMapController> {
                 userAgentPackageName: 'com.soundscape.frontend',
                 tileProvider: PersistentTileProvider(),
               ),
-              CircleLayer(
+              Obx(() => CircleLayer(
                 circles: [
                   if (controller.currentUserLocation.value != null)
                     CircleMarker(
@@ -101,8 +102,8 @@ class MapView extends GetView<SoundMapController> {
                       useRadiusInMeter: true,
                     ),
                 ],
-              ),
-              MarkerLayer(
+              )),
+              Obx(() => MarkerLayer(
                 markers: [
                   ...controller.markers,
                   if (controller.currentUserLocation.value != null)
@@ -113,13 +114,13 @@ class MapView extends GetView<SoundMapController> {
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          Transform.rotate(
+                          Obx(() => Transform.rotate(
                             angle: (controller.currentHeading.value * (3.14159 / 180)),
                             child: CustomPaint(
                               size: const Size(60, 60),
                               painter: DirectionPainter(),
                             ),
-                          ),
+                          )),
                           Container(
                             width: 16,
                             height: 16,
@@ -136,12 +137,52 @@ class MapView extends GetView<SoundMapController> {
                       ),
                     ),
                 ],
-              ),
+              )),
             ],
           ),
           
+          // Compass Calibration Warning
+          Obx(() => !controller.isCompassReliable.value ? Positioned(
+            top: 80,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: GestureDetector(
+                onTap: () {
+                  Get.snackbar(
+                    'Compass Calibration',
+                    'Wave your device in a figure-8 pattern to calibrate the compass.',
+                    backgroundColor: Colors.orange.withValues(alpha: 0.9),
+                    colorText: Colors.white,
+                    duration: const Duration(seconds: 5),
+                    icon: const Icon(Icons.vibration, color: Colors.white),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Colors.white, size: 16),
+                      SizedBox(width: 8),
+                      Text(
+                        'Calibrate Compass',
+                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ) : const SizedBox.shrink()),
+
           // Navigation Controls
-          Positioned(
+          Obx(() => Positioned(
             bottom: controller.visibleRecordings.isEmpty ? 32 : 200,
             right: 16,
             child: Column(
@@ -174,11 +215,10 @@ class MapView extends GetView<SoundMapController> {
                 ),
               ],
             ),
-          ),
+          )),
 
           // Nearby Recordings Carousel
-          if (controller.visibleRecordings.isNotEmpty)
-            Positioned(
+          Obx(() => controller.visibleRecordings.isNotEmpty ? Positioned(
               bottom: 32,
               left: 0,
               right: 0,
@@ -195,7 +235,7 @@ class MapView extends GetView<SoundMapController> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+                          color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
                           blurRadius: 12,
                           offset: const Offset(0, 6),
                         )
@@ -218,7 +258,7 @@ class MapView extends GetView<SoundMapController> {
                                     width: 40,
                                     height: 40,
                                     decoration: BoxDecoration(
-                                      color: Colors.teal.withOpacity(0.1),
+                                      color: Colors.teal.withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: const Icon(Icons.graphic_eq, color: Colors.teal, size: 20),
@@ -240,7 +280,7 @@ class MapView extends GetView<SoundMapController> {
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          DateFormat('MMM d, h:mm a').format(rec.timestamp),
+                                          DateFormat('MMM d, h:mm a').format(rec.timestamp.toIST()),
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -254,9 +294,9 @@ class MapView extends GetView<SoundMapController> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                       decoration: BoxDecoration(
-                                        color: Colors.green.withOpacity(0.1),
+                                        color: Colors.green.withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(color: Colors.green.withOpacity(0.3)),
+                                        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
                                       ),
                                       child: Text(
                                         "${rec.confidence!.round()}%",
@@ -285,7 +325,7 @@ class MapView extends GetView<SoundMapController> {
                                         label: const Text("GO LIVE", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
                                         style: TextButton.styleFrom(
                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                                          backgroundColor: Colors.red.withOpacity(0.1),
+                                          backgroundColor: Colors.red.withValues(alpha: 0.1),
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                         ),
                                       ),
@@ -310,17 +350,16 @@ class MapView extends GetView<SoundMapController> {
                   );
                 },
               ),
-            ),
+            ) : const SizedBox.shrink()),
 
-          if (controller.isLoading.value)
-            Container(
+          Obx(() => controller.isLoading.value ? Container(
               color: Colors.black12,
               child: const Center(
                 child: CircularProgressIndicator(),
               ),
-            ),
+            ) : const SizedBox.shrink()),
         ],
-      )),
+      ),
     );
   }
 
@@ -362,7 +401,7 @@ class MapView extends GetView<SoundMapController> {
                   return ChoiceChip(
                     label: Text(status),
                     selected: isSelected,
-                    selectedColor: Colors.teal.withOpacity(0.2),
+                    selectedColor: Colors.teal.withValues(alpha: 0.2),
                     backgroundColor: isDark ? Colors.grey[800] : null,
                     labelStyle: TextStyle(
                       color: isSelected ? Colors.teal : (isDark ? Colors.grey[300] : Colors.black87),
@@ -422,7 +461,7 @@ class MapView extends GetView<SoundMapController> {
                 icon: Icon(Icons.calendar_today, size: 18, color: isDark ? Colors.white70 : Colors.black87),
                 label: Text(
                   filters.startDate != null 
-                    ? "${DateFormat.MMMd().format(filters.startDate!)} - ${DateFormat.MMMd().format(filters.endDate!)}"
+                    ? "${DateFormat.MMMd().format(filters.startDate!.toIST())} - ${DateFormat.MMMd().format(filters.endDate!.toIST())}"
                     : "Select Date Range",
                   style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                 ),

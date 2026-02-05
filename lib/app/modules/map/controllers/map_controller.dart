@@ -5,7 +5,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../data/models/recording_model.dart';
@@ -25,9 +24,14 @@ class SoundMapController extends GetxController {
   final visibleRecordings = <Recording>[].obs;
   final mapController = MapController();
   
+  // Cache for wiki data
+  final wikiData = <String, Map<String, dynamic>>{}.obs;
+  final _loadingSpecies = <String>{};
+
   final Rx<LatLng> initialCenter = LatLng(0, 0).obs; 
   final Rx<LatLng?> currentUserLocation = Rx<LatLng?>(null);
   final RxDouble currentHeading = 0.0.obs;
+  final RxBool isCompassReliable = true.obs;
   
   final RxBool isLoading = true.obs;
   final RxString searchQuery = ''.obs;
@@ -69,7 +73,7 @@ class SoundMapController extends GetxController {
 
       if (status.isGranted) {
         _startLocationTracking();
-        _startHeadingTracking();
+        startHeadingTracking();
         try {
           final pos = await _locationService.getCurrentLocation();
           if (pos != null) {
@@ -111,13 +115,30 @@ class SoundMapController extends GetxController {
     );
   }
 
-  void _startHeadingTracking() {
+  void startHeadingTracking() {
+    if (!_storageService.useCompass) {
+      stopHeadingTracking();
+      return;
+    }
+    
     _headingSubscription?.cancel();
     _headingSubscription = _locationService.getHeadingStream()?.listen((event) {
       if (event.heading != null) {
         currentHeading.value = event.heading!;
       }
+      
+      // On Android, accuracy < 3 means it's unreliable and needs calibration
+      // High accuracy is 3.
+      if (event.accuracy != null) {
+        isCompassReliable.value = event.accuracy! >= 3;
+      }
     });
+  }
+
+  void stopHeadingTracking() {
+    _headingSubscription?.cancel();
+    _headingSubscription = null;
+    isCompassReliable.value = true; // Hide warning when off
   }
 
   void _fallbackToRecordings() {
@@ -126,6 +147,34 @@ class SoundMapController extends GetxController {
       final latest = recordings.first;
       if (latest.latitude != null && latest.longitude != null) {
         initialCenter.value = LatLng(latest.latitude!, latest.longitude!);
+      }
+    }
+  }
+
+  Future<void> resolveWikiFor(String? name) async {
+    if (name == null || name.isEmpty) return;
+    if (wikiData.containsKey(name) || _loadingSpecies.contains(name)) return;
+
+    final lowerName = name.toLowerCase();
+    final invalidNames = {'silence', 'unknown', 'speech', 'music', 'human voice', 'background noise', 'unidentified bird'};
+    if (invalidNames.contains(lowerName) || lowerName.contains('unidentified')) return;
+
+    _loadingSpecies.add(name);
+    try {
+      final data = await _wikiService.getBirdInfo(name);
+      if (data != null) {
+        wikiData[name] = data;
+      }
+    } finally {
+      _loadingSpecies.remove(name);
+    }
+  }
+
+  void _slowLoadWikiForRecordings(List<Recording> recordings) async {
+    for (var rec in recordings) {
+      if (rec.commonName != null) {
+        await resolveWikiFor(rec.commonName);
+        await Future.delayed(const Duration(milliseconds: 500)); // Simply slow
       }
     }
   }
@@ -179,6 +228,9 @@ class SoundMapController extends GetxController {
         );
       }
     }
+
+    // After loading markers, start slow-loading wiki info for visible items
+    _slowLoadWikiForRecordings(recordings);
   }
   
   Widget _buildMarkerChild(Recording rec) {
@@ -187,24 +239,27 @@ class SoundMapController extends GetxController {
         Get.toNamed(Routes.DETAILS, arguments: rec);
       },
       child: rec.commonName != null 
-          ? FutureBuilder<String?>(
-              future: _wikiService.getBirdImage(rec.commonName!),
-              builder: (context, snapshot) {
-                if (snapshot.hasData && snapshot.data != null) {
-                  return Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
-                      boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
-                    ),
-                    child: CircleAvatar(
-                      backgroundImage: CachedNetworkImageProvider(snapshot.data!),
-                    ),
-                  );
-                }
-                return _defaultMarker();
-              },
-            )
+          ? Obx(() {
+              final name = rec.commonName!;
+              final info = wikiData[name];
+              final imageUrl = info?['imageUrl'];
+              
+              if (imageUrl != null) {
+                return Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                  ),
+                  child: CircleAvatar(
+                    backgroundImage: CachedNetworkImageProvider(imageUrl),
+                  ),
+                );
+              }
+              // If not loaded yet, trigger resolve for this specific one if it's the one we tapped or viewing
+              resolveWikiFor(rec.commonName);
+              return _defaultMarker();
+            })
           : _defaultMarker(),
     );
   }

@@ -7,11 +7,16 @@ import 'package:share_plus/share_plus.dart';
 import 'package:flutter/material.dart'; 
 import 'package:url_launcher/url_launcher.dart';
 import 'package:appwrite/appwrite.dart';
+import 'package:path/path.dart' as p;
 import '../../../data/models/recording_model.dart';
 import '../../../data/services/appwrite_service.dart';
+import '../../../data/services/evolution_api_service.dart';
 import '../../../data/services/storage_service.dart';
+import '../../../data/services/model_download_service.dart';
 import '../../../data/services/wiki_service.dart';
 import '../../../data/services/audio_analysis_service.dart';
+import '../../../data/services/connectivity_service.dart';
+import '../../../utils/datetime_extensions.dart';
 
 class DetailsController extends GetxController {
   late Recording recording;
@@ -19,6 +24,9 @@ class DetailsController extends GetxController {
   final AppwriteService _appwriteService = Get.find<AppwriteService>();
   final AudioAnalysisService _analysisService = Get.find<AudioAnalysisService>();
   final WikiService _wikiService = Get.put(WikiService());
+  final StorageService _storageService = Get.find<StorageService>();
+  final ModelDownloadService _modelDownloadService = Get.find<ModelDownloadService>();
+  final ConnectivityService _connectivityService = Get.find<ConnectivityService>();
   
   // Waveform Controller
   late PlayerController waveformController;
@@ -28,6 +36,15 @@ class DetailsController extends GetxController {
   Rx<Duration> totalDuration = Duration.zero.obs;
   Rx<Duration> remainingTime = Duration.zero.obs;
   RxBool isUploading = false.obs;
+  RxBool isSentToResearch = false.obs;
+  final RxDouble researchProgress = 0.0.obs;
+  
+  // Connectivity
+  RxBool get isOnline => _connectivityService.isConnectedRx;
+  
+  // Model State
+  final RxString activeModelId = 'yamnet'.obs;
+  final RxSet<String> downloadedModels = <String>{}.obs;
   
   String? localFilePath;
   RandomAccessFile? _audioFileHandle;
@@ -40,6 +57,14 @@ class DetailsController extends GetxController {
   final RxDouble scanProgress = 0.0.obs;
   final scanResults = <String, double>{}.obs;
   final timelineEvents = <Map<String, dynamic>>[].obs;
+  
+  // Language Support
+  final RxString selectedLanguage = 'en'.obs;
+  final List<Map<String, String>> languages = [
+    {'code': 'en', 'name': 'English'},
+    {'code': 'ml', 'name': 'മലയാളം'},
+    {'code': 'hi', 'name': 'हिन्दी'},
+  ];
 
   // Track requested species to prevent duplicate fetches
   final Set<String> _requestedSpecies = {};
@@ -48,6 +73,9 @@ class DetailsController extends GetxController {
   void onInit() async {
     super.onInit();
     recording = Get.arguments as Recording;
+    isSentToResearch.value = recording.researchRequested;
+    activeModelId.value = _storageService.activeModelId;
+    _checkDownloadedModels();
     waveformController = PlayerController();
     _prepareFile();
     
@@ -59,12 +87,54 @@ class DetailsController extends GetxController {
     // No eager fetching here anymore. View calls resolveSpeciesInfo
   }
 
+  Future<void> _checkDownloadedModels() async {
+    for (var model in _modelDownloadService.availableModels) {
+      if (await _modelDownloadService.isModelDownloaded(model.id)) {
+        downloadedModels.add(model.id);
+      }
+    }
+  }
+
+  Future<void> switchModel(String id) async {
+    if (activeModelId.value == id) return;
+
+    if (id != 'yamnet' && !downloadedModels.contains(id)) {
+      final model = _modelDownloadService.availableModels.firstWhere((m) => m.id == id);
+      await _modelDownloadService.downloadAcousticModel(model);
+      await _checkDownloadedModels();
+      if (!downloadedModels.contains(id)) return;
+    }
+
+    _storageService.activeModelId = id;
+    activeModelId.value = id;
+    await _analysisService.reloadModel();
+    
+    // If we have a file handle and are not currently playing, 
+    // re-analyze current position to show updated results
+    if (_audioFileHandle != null && !isPlaying.value) {
+      _lastAnalysisTime = const Duration(seconds: -1); // Force re-analysis
+      await _analyzeChunkAt(currentPosition.value);
+    }
+    
+    Get.snackbar(
+      'Model Switched',
+      'Using ${id == 'yamnet' ? 'YAMNet' : _modelDownloadService.availableModels.firstWhere((m) => m.id == id).name}',
+      backgroundColor: Colors.teal,
+      colorText: Colors.white,
+      snackPosition: SnackPosition.BOTTOM,
+    );
+  }
+
+  List<AcousticModel> get availableModels => _modelDownloadService.availableModels;
+
   // Called by View to lazily load data
   void resolveSpeciesInfo(String name) {
     if (name.isEmpty) return;
     
+    final String langKey = "${selectedLanguage.value}_$name";
+    
     // Check if we already have data or already requested it
-    if (speciesData.containsKey(name) || _requestedSpecies.contains(name)) {
+    if (speciesData.containsKey(langKey) || _requestedSpecies.contains(langKey)) {
       return;
     }
 
@@ -79,17 +149,33 @@ class DetailsController extends GetxController {
   }
 
   Future<void> _fetchSpeciesInfo(String name) async {
-    _requestedSpecies.add(name);
+    final String langKey = "${selectedLanguage.value}_$name";
+    _requestedSpecies.add(langKey);
     // Don't set global isLoadingWiki = true, as it blocks other UI. 
     // Just fetch silently and update map.
     
     try {
-      final data = await _wikiService.getBirdInfo(name);
+      final data = await _wikiService.getBirdInfo(name, languageCode: selectedLanguage.value);
       if (data != null) {
-        speciesData[name] = data;
+        speciesData[langKey] = data;
       }
     } catch (e) {
-      print("Error fetching wiki for $name: $e");
+      print("Error fetching wiki for $name in ${selectedLanguage.value}: $e");
+    }
+  }
+
+  void changeLanguage(String? code) {
+    if (code == null || code == selectedLanguage.value) return;
+    selectedLanguage.value = code;
+    
+    // Re-trigger info fetch for currently displayed species
+    final predictions = recording.predictions?.entries.toList() ?? [];
+    if (predictions.isEmpty && recording.commonName != null) {
+        predictions.add(MapEntry(recording.commonName!, recording.confidence ?? 1.0));
+    }
+    
+    for (var entry in predictions.take(5)) {
+      resolveSpeciesInfo(entry.key);
     }
   }
 
@@ -131,15 +217,143 @@ class DetailsController extends GetxController {
   // Removed _refreshSpeciesWiki and fetchSpeciesInfos (batch)
   
   Future<void> sendToResearch() async {
-    // Placeholder for research submission logic
-    // In a real app, this would update a 'research_requested' flag in the database
-    Get.snackbar(
-      'Sent to Research',
-      'This recording has been flagged for expert review.',
-      backgroundColor: Colors.purple,
-      colorText: Colors.white,
-      icon: const Icon(Icons.science, color: Colors.white),
+    if (localFilePath == null) {
+      Get.snackbar('Error', 'Audio file not available locally.', backgroundColor: Colors.red, colorText: Colors.white);
+      return;
+    }
+
+    researchProgress.value = 0.1;
+    
+    // Start background process
+    _processResearchSubmission();
+
+    // Show Progress Dialog
+    Get.dialog(
+      AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.science, color: Colors.purple),
+            SizedBox(width: 12),
+            Text('Research Submission'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Sending recording and metadata to the research group in the background.'),
+            const SizedBox(height: 20),
+            Obx(() => Column(
+              children: [
+                LinearProgressIndicator(
+                  value: researchProgress.value,
+                  backgroundColor: Colors.purple.withValues(alpha: 0.1),
+                  color: Colors.purple,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${(researchProgress.value * 100).toInt()}% Complete',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.purple),
+                ),
+              ],
+            )),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.purple)),
+          ),
+        ],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      barrierDismissible: true,
     );
+  }
+
+  Future<void> _processResearchSubmission() async {
+    final EvolutionApiService evoService = Get.find<EvolutionApiService>();
+
+    try {
+      // 1. Resolve Group JID
+      researchProgress.value = 0.2;
+      String? groupJid = await evoService.getGroupJidFromInvite(EvolutionApiService.groupInviteCode);
+      groupJid ??= "120363044123456789@g.us"; 
+
+      // 2. Prepare Metadata
+      researchProgress.value = 0.4;
+      final StringBuffer metadata = StringBuffer();
+      metadata.writeln("🔬 *New Research Submission*");
+      metadata.writeln("━━━━━━━━━━━━━━━━");
+      metadata.writeln("*ID:* `${recording.id}`");
+      metadata.writeln("*Date:* ${recording.timestamp.toIST().toString().split('.')[0]}");
+      metadata.writeln("*Duration:* ${recording.duration.inSeconds}s");
+      
+      if (recording.latitude != null && recording.longitude != null) {
+        metadata.writeln("*Location:* ${recording.latitude}, ${recording.longitude}");
+        metadata.writeln("*Maps:* https://www.google.com/maps/search/?api=1&query=${recording.latitude},${recording.longitude}");
+      }
+      
+      metadata.writeln("\n*Analysis Results:*");
+      if (recording.commonName != null) {
+        metadata.writeln("• Primary: *${recording.commonName}* (${(recording.confidence! * 100).toStringAsFixed(1)}%)");
+      }
+      
+      if (recording.predictions != null && recording.predictions!.isNotEmpty) {
+        final sorted = recording.predictions!.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
+        
+        metadata.writeln("\n*Top Predictions:*");
+        for (var entry in sorted.take(5)) {
+          metadata.writeln("- ${entry.key}: ${(entry.value * 100).toStringAsFixed(1)}%");
+        }
+      }
+
+      if (recording.notes != null && recording.notes!.isNotEmpty) {
+        metadata.writeln("\n*Notes:* ${recording.notes}");
+      }
+      
+      metadata.writeln("━━━━━━━━━━━━━━━━");
+      metadata.writeln("_Sent via SoundScape Research Portal_");
+
+      // 3. Send to WhatsApp
+      researchProgress.value = 0.6;
+      await evoService.sendMessage(groupJid, metadata.toString());
+      
+      researchProgress.value = 0.8;
+      await evoService.sendAudio(groupJid, localFilePath!);
+      
+      researchProgress.value = 0.95;
+      await evoService.sendDocument(groupJid, localFilePath!, p.basename(localFilePath!));
+
+      // 4. Update local state
+      recording.researchRequested = true;
+      isSentToResearch.value = true;
+      await Get.find<StorageService>().updateRecording(recording);
+      
+      // 5. Update remote state
+      await _appwriteService.updateResearchStatus(recording.id, true);
+
+      researchProgress.value = 1.0;
+      
+      Get.snackbar(
+        'Success',
+        'Data sent to research group successfully!',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        icon: const Icon(Icons.check_circle, color: Colors.white),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e) {
+      print("Research Error: $e");
+      researchProgress.value = 0.0;
+      Get.snackbar(
+        'Research Submission Failed',
+        'Could not send data to WhatsApp: $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
   }
 
   Future<void> launchURL(String url) async {

@@ -6,6 +6,7 @@ import '../../../data/services/storage_service.dart';
 import '../../../data/services/model_download_service.dart';
 import '../../../data/services/audio_analysis_service.dart';
 import '../../../routes/app_pages.dart';
+import '../../map/controllers/map_controller.dart';
 
 class SettingsController extends GetxController {
   final _appwriteService = Get.find<AppwriteService>();
@@ -19,6 +20,7 @@ class SettingsController extends GetxController {
   final isDarkMode = false.obs;
   final notificationsEnabled = true.obs;
   final showRecordingInstructions = true.obs;
+  final useCompass = true.obs;
   final activeModelId = 'yamnet'.obs;
   final downloadedModels = <String>{}.obs;
 
@@ -46,6 +48,7 @@ class SettingsController extends GetxController {
     isDarkMode.value = _storageService.isDarkMode;
     notificationsEnabled.value = _storageService.notificationsEnabled;
     showRecordingInstructions.value = _storageService.showRecordingInstructions;
+    useCompass.value = _storageService.useCompass;
     activeModelId.value = _storageService.activeModelId;
     
     // Apply theme after build frame to avoid "setState called during build" error
@@ -68,6 +71,23 @@ class SettingsController extends GetxController {
   void toggleRecordingInstructions(bool val) {
     showRecordingInstructions.value = val;
     _storageService.showRecordingInstructions = val;
+  }
+
+  void toggleCompass(bool val) {
+    useCompass.value = val;
+    _storageService.useCompass = val;
+    
+    // Immediately apply to MapController if it's active
+    try {
+      final mapController = Get.find<SoundMapController>();
+      if (val) {
+        mapController.startHeadingTracking();
+      } else {
+        mapController.stopHeadingTracking();
+      }
+    } catch (_) {
+      // MapController not initialized yet
+    }
   }
 
   Future<void> setActiveModel(String id) async {

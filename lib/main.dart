@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'app/data/services/appwrite_service.dart';
+import 'app/data/services/connectivity_service.dart';
+import 'app/data/services/evolution_api_service.dart';
 import 'app/data/services/location_service.dart';
 import 'app/data/services/model_download_service.dart';
 import 'app/data/services/noise_service.dart';
@@ -15,7 +17,9 @@ import 'app/routes/app_pages.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Get.putAsync(() => StorageService().init());
+  await Get.putAsync(() => ConnectivityService().init());
   await Get.putAsync(() => AppwriteService().init());
+  await Get.putAsync(() => EvolutionApiService().init());
   await Get.putAsync(() => WikiService().init());
   await Get.putAsync(() => NotificationService().init());
   Get.put(ModelDownloadService());
