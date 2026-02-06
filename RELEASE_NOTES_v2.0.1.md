@@ -233,11 +233,10 @@ If critical issues found:
 
 ### Bug Reports
 - GitHub Issues: https://github.com/project-soundscape/frontend/issues
-- Email: support@soundscape-app.com
+- Email: support@pro26.in
 
 ### Feature Requests
 - GitHub Discussions: https://github.com/project-soundscape/frontend/discussions
-- Community Forum: forum.soundscape-app.com
 
 ### Documentation
 - Comprehensive Docs: `COMPREHENSIVE_DOCUMENTATION.md`

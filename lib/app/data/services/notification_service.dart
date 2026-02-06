@@ -17,9 +17,17 @@ class NotificationService extends GetxService {
       requestSoundPermission: false,
     );
 
+    const DarwinInitializationSettings initializationSettingsDarwin =
+        DarwinInitializationSettings(
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
+    );
+
     const InitializationSettings initializationSettings = InitializationSettings(
       android: initializationSettingsAndroid,
       iOS: initializationSettingsIOS,
+      macOS: initializationSettingsDarwin,
     );
 
     await _notificationsPlugin.initialize(
@@ -34,15 +42,26 @@ class NotificationService extends GetxService {
   }
 
   Future<void> requestPermissions() async {
-    if (Platform.isIOS) {
-      await _notificationsPlugin
-          .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>()
-          ?.requestPermissions(
-            alert: true,
-            badge: true,
-            sound: true,
-          );
+    if (Platform.isIOS || Platform.isMacOS) {
+      if (Platform.isIOS) {
+        await _notificationsPlugin
+            .resolvePlatformSpecificImplementation<
+                IOSFlutterLocalNotificationsPlugin>()
+            ?.requestPermissions(
+              alert: true,
+              badge: true,
+              sound: true,
+            );
+      } else if (Platform.isMacOS) {
+        await _notificationsPlugin
+            .resolvePlatformSpecificImplementation<
+                MacOSFlutterLocalNotificationsPlugin>()
+            ?.requestPermissions(
+              alert: true,
+              badge: true,
+              sound: true,
+            );
+      }
     } else if (Platform.isAndroid) {
       // Android 13 (API 33) and above requires runtime permission
       if (await Permission.notification.isDenied) {
@@ -67,12 +86,13 @@ class NotificationService extends GetxService {
       ticker: 'ticker',
     );
 
-    const DarwinNotificationDetails iOSPlatformChannelSpecifics =
+    const DarwinNotificationDetails darwinPlatformChannelSpecifics =
         DarwinNotificationDetails();
 
     const NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
-      iOS: iOSPlatformChannelSpecifics,
+      iOS: darwinPlatformChannelSpecifics,
+      macOS: darwinPlatformChannelSpecifics,
     );
 
     await _notificationsPlugin.show(
