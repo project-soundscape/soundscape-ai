@@ -132,7 +132,7 @@ class RecordingListItem extends StatelessWidget {
           decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(12)),
           child: const Icon(Icons.delete, color: Colors.white),
         ),
-        onDismissed: (_) => controller.deleteRecording(recording),
+        onDismissed: (_) => controller.deleteRecording(recording, context),
         child: Container(
           decoration: BoxDecoration(
             color: isDark ? Colors.grey[900] : Colors.white,
@@ -188,7 +188,7 @@ class RecordingListItem extends StatelessWidget {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          "${recording.confidence!.toInt()}%",
+                          "${(recording.confidence! * 100).toInt()}%",
                           style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11),
                         ),
                       )

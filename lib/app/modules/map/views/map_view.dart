@@ -80,6 +80,8 @@ class MapView extends GetView<SoundMapController> {
             options: MapOptions(
               initialCenter: controller.initialCenter.value,
               initialZoom: 13.0,
+              minZoom: 3.0,
+              maxZoom: 18.0,
             ),
             children: [
               TileLayer(
@@ -188,6 +190,22 @@ class MapView extends GetView<SoundMapController> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // North Button
+                if (controller.mapController.camera.rotation != 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: FloatingActionButton(
+                      heroTag: 'resetRotation',
+                      mini: true,
+                      backgroundColor: isDark ? Colors.grey[800] : Colors.white,
+                      foregroundColor: Colors.redAccent,
+                      onPressed: controller.resetRotation,
+                      child: Transform.rotate(
+                        angle: -controller.mapController.camera.rotation * (3.14159 / 180),
+                        child: const Icon(Icons.navigation, size: 20),
+                      ),
+                    ),
+                  ),
                 FloatingActionButton(
                   heroTag: 'zoomIn',
                   mini: true,
@@ -299,7 +317,7 @@ class MapView extends GetView<SoundMapController> {
                                         border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
                                       ),
                                       child: Text(
-                                        "${rec.confidence!.round()}%",
+                                        "${(rec.confidence! * 100).round()}%",
                                         style: TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.bold,

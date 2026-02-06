@@ -94,7 +94,7 @@ class DetailsView extends GetView<DetailsController> {
                                 ),
                               ),
                               child: Text(
-                                '${controller.recording.confidence!.toInt()}%',
+                                '${(controller.recording.confidence! * 100).toInt()}%',
                                 style: const TextStyle(
                                   color: Colors.green,
                                   fontWeight: FontWeight.bold,
@@ -137,12 +137,15 @@ class DetailsView extends GetView<DetailsController> {
                                 100.0,
                               ),
                               playerController: controller.waveformController,
-                              enableSeekGesture: false,
+                              enableSeekGesture: true,
                               waveformType: WaveformType.fitWidth,
-                              playerWaveStyle: const PlayerWaveStyle(
-                                fixedWaveColor: Colors.teal,
+                              playerWaveStyle: PlayerWaveStyle(
+                                fixedWaveColor: isDark ? Colors.grey[700]! : Colors.grey[300]!,
                                 liveWaveColor: Colors.tealAccent,
                                 spacing: 6,
+                                showSeekLine: true,
+                                seekLineColor: Colors.orange,
+                                seekLineThickness: 2,
                               ),
                             ),
                             // Detection Timeline Markers
@@ -295,7 +298,7 @@ class DetailsView extends GetView<DetailsController> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        ...results.take(10).map((e) => Padding(
+                        ...results.take(3).map((e) => Padding(
                           padding: const EdgeInsets.only(bottom: 12.0),
                           child: Row(
                             children: [
@@ -318,9 +321,9 @@ class DetailsView extends GetView<DetailsController> {
                     controller.recording.predictions != null &&
                     controller.recording.predictions!.isNotEmpty;
 
-                // Show live predictions if they are available (even if not playing)
-                // Otherwise fallback to static predictions from the recording object
-                final bool useLive = livePredictions.isNotEmpty;
+                // Only show live predictions when playing
+                // When stopped, show database (static) predictions
+                final bool useLive = isPlaying && livePredictions.isNotEmpty;
 
                 if (!useLive && !hasStaticPredictions) {
                   return const SizedBox.shrink();
@@ -859,48 +862,53 @@ class DetailsView extends GetView<DetailsController> {
 
               if (controller.recording.latitude != null &&
                   controller.recording.longitude != null)
-                SizedBox(
-                  height: 200,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: FlutterMap(
-                      options: MapOptions(
-                        initialCenter: LatLng(
-                          controller.recording.latitude!,
-                          controller.recording.longitude!,
+                GestureDetector(
+                  onTap: controller.openInMaps,
+                  child: SizedBox(
+                    height: 200,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: FlutterMap(
+                        options: MapOptions(
+                          initialCenter: LatLng(
+                            controller.recording.latitude!,
+                            controller.recording.longitude!,
+                          ),
+                          initialZoom: 15.0,
+                          minZoom: 3.0,
+                          maxZoom: 18.0,
+                          interactionOptions: const InteractionOptions(
+                            flags: InteractiveFlag.none,
+                          ), // Static map feel
                         ),
-                        initialZoom: 15.0,
-                        interactionOptions: const InteractionOptions(
-                          flags: InteractiveFlag.none,
-                        ), // Static map feel
+                        children: [
+                          TileLayer(
+                            urlTemplate: isDark 
+                                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
+                                : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+                            subdomains: const ['a', 'b', 'c'],
+                            userAgentPackageName: 'com.soundscape.frontend',
+                            tileProvider: PersistentTileProvider(),
+                          ),
+                          MarkerLayer(
+                            markers: [
+                              Marker(
+                                point: LatLng(
+                                  controller.recording.latitude!,
+                                  controller.recording.longitude!,
+                                ),
+                                width: 40,
+                                height: 40,
+                                child: const Icon(
+                                  Icons.location_on,
+                                  color: Colors.red,
+                                  size: 40,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      children: [
-                        TileLayer(
-                          urlTemplate: isDark 
-                              ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-                              : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-                          subdomains: const ['a', 'b', 'c'],
-                          userAgentPackageName: 'com.soundscape.frontend',
-                          tileProvider: PersistentTileProvider(),
-                        ),
-                        MarkerLayer(
-                          markers: [
-                            Marker(
-                              point: LatLng(
-                                controller.recording.latitude!,
-                                controller.recording.longitude!,
-                              ),
-                              width: 40,
-                              height: 40,
-                              child: const Icon(
-                                Icons.location_on,
-                                color: Colors.red,
-                                size: 40,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
                     ),
                   ),
                 )

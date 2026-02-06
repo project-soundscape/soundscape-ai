@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:audio_waveforms/audio_waveforms.dart';
 import '../../../routes/app_pages.dart';
 import '../controllers/home_controller.dart';
 import '../../../data/services/audio_analysis_service.dart';
@@ -34,6 +35,44 @@ class HomeView extends GetView<HomeController> {
                   ),
                 ),
                 
+                const SizedBox(height: 24),
+
+                // Waveform Visualization
+                Obx(() {
+                  if (controller.isRecording.value) {
+                    return Container(
+                      height: 80,
+                      width: MediaQuery.of(context).size.width - 48,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.black26 : Colors.grey[50],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: CustomPaint(
+                        painter: LiveWaveformPainter(
+                          amplitudes: controller.liveAmplitudes,
+                          color: Colors.teal,
+                        ),
+                      ),
+                    );
+                  } else if (controller.isCompletedRecording.value) {
+                    return AudioFileWaveforms(
+                      size: Size(MediaQuery.of(context).size.width - 48, 80),
+                      playerController: controller.playerController,
+                      enableSeekGesture: true,
+                      waveformType: WaveformType.fitWidth,
+                      playerWaveStyle: PlayerWaveStyle(
+                        fixedWaveColor: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                        liveWaveColor: Colors.tealAccent,
+                        spacing: 6,
+                        showSeekLine: true,
+                        seekLineColor: Colors.orange,
+                        seekLineThickness: 2,
+                      ),
+                    );
+                  }
+                  return const SizedBox(height: 80);
+                }),
+
                 const SizedBox(height: 48),
                 
                 // Main Action Button (Record/Review)
@@ -298,4 +337,39 @@ class HomeView extends GetView<HomeController> {
       ],
     );
   }
+}
+
+class LiveWaveformPainter extends CustomPainter {
+  final List<double> amplitudes;
+  final Color color;
+
+  LiveWaveformPainter({required this.amplitudes, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+
+    if (amplitudes.isEmpty) return;
+
+    final double widthBetweenBars = size.width / 100;
+    
+    for (int i = 0; i < amplitudes.length; i++) {
+      // Scale amplitude for visibility (amplitudes are 0 to 1.0ish)
+      final double height = (amplitudes[i] * size.height * 2).clamp(4.0, size.height);
+      final double x = i * widthBetweenBars;
+      final double yCenter = size.height / 2;
+      
+      canvas.drawLine(
+        Offset(x, yCenter - height / 2),
+        Offset(x, yCenter + height / 2),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

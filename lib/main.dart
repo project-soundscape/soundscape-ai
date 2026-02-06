@@ -13,6 +13,7 @@ import 'app/data/services/storage_service.dart';
 import 'app/data/services/sync_service.dart';
 import 'app/data/services/wiki_service.dart';
 import 'app/routes/app_pages.dart';
+import 'package:frontend/app/utils/snackbar_utils.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +31,7 @@ void main() async {
   runApp(
     GetMaterialApp(
       title: "Project Soundscape",
+      scaffoldMessengerKey: snackbarKey,
       theme: ThemeData(
         primarySwatch: Colors.teal,
         scaffoldBackgroundColor: Colors.grey[50],

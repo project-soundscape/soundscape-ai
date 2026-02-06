@@ -116,6 +116,19 @@ class AppwriteService extends GetxService {
     }
   }
 
+  Future<void> createRecovery(String email) async {
+    try {
+      // The URL should be a valid deep link or web page in your app to handle the reset
+      // For now, using a placeholder. You might need to update this URL in Appwrite console.
+      await account.createRecovery(
+        email: email, 
+        url: 'https://soundscape.example.com/reset-password',
+      );
+    } catch (e) {
+      throw Exception("Failed to send recovery email: ${e.toString()}");
+    }
+  }
+
   Future<models.User?> getCurrentUser() async {
     try {
       return await account.get();
@@ -133,70 +146,13 @@ class AppwriteService extends GetxService {
         collectionId: recordingsCollectionId,
         queries: [
           Query.orderDesc('\$createdAt'),
+          Query.limit(5000),
         ]
       );
 
       List<Recording> recordings = [];
-
       for (var doc in result.documents) {
-        final data = doc.data;
-        String fileId = data['s3key'];
-        // Construct the view URL manually as getFileView returns bytes
-        String path = "$endpoint/storage/buckets/$bucketId/files/$fileId/view?project=$projectId";
-
-        Recording rec = Recording(
-          id: doc.$id,
-          path: path,
-          timestamp: DateTime.parse(doc.$createdAt),
-          duration: Duration(seconds: data['duration'] ?? 0), 
-          latitude: (data['latitude'] as num?)?.toDouble(),
-          longitude: (data['longitude'] as num?)?.toDouble(),
-          status: (data['status'] as String?)?.toLowerCase() ?? 'pending',
-          streamUrl: data['streamUrl'] as String?,
-          userId: data['user-id'] as String?, // Store the user ID
-          researchRequested: data['researchRequested'] ?? false,
-        );
-
-        try {
-           final detResult = await databases.listDocuments(
-             databaseId: databaseId,
-             collectionId: detectionsCollectionId,
-             queries: [ Query.equal('recordings', doc.$id) ]
-           );
-           
-           if (detResult.documents.isNotEmpty) {
-             final det = detResult.documents.first;
-             final names = det.data['scientificName'] as List?;
-             final confs = det.data['confidenceLevel'] as List?;
-             
-             if (names != null && names.isNotEmpty) {
-               rec.commonName = names.first.toString();
-               
-               if (confs != null) {
-                 final preds = <String, double>{};
-                 for (int i = 0; i < names.length; i++) {
-                   if (i < confs.length) {
-                     final name = names[i].toString();
-                     final conf = confs[i];
-                     if (conf is num) {
-                       preds[name] = conf.toDouble();
-                     }
-                   }
-                 }
-                 rec.predictions = preds;
-               }
-             }
-             
-             if (confs != null && confs.isNotEmpty) {
-               rec.confidence = (confs.first as num).toDouble();
-             }
-             rec.status = 'processed';
-           }
-        } catch (e) {
-          print("Appwrite: Error fetching detections for ${doc.$id}: $e");
-        }
-
-        recordings.add(rec);
+        recordings.add(await _mapDocumentToRecording(doc));
       }
       return recordings;
 
@@ -204,6 +160,67 @@ class AppwriteService extends GetxService {
       print("Appwrite: Error fetching recordings: $e");
       return [];
     }
+  }
+
+  Future<Recording> _mapDocumentToRecording(models.Document doc) async {
+    final data = doc.data;
+    String fileId = data['s3key'];
+    String path = "$endpoint/storage/buckets/$bucketId/files/$fileId/view?project=$projectId";
+
+    Recording rec = Recording(
+      id: doc.$id,
+      path: path,
+      timestamp: DateTime.parse(doc.$createdAt),
+      duration: Duration(seconds: data['duration'] ?? 0),
+      latitude: (data['latitude'] as num?)?.toDouble(),
+      longitude: (data['longitude'] as num?)?.toDouble(),
+      status: (data['status'] as String?)?.toLowerCase() ?? 'pending',
+      streamUrl: data['streamUrl'] as String?,
+      userId: data['user-id'] as String?,
+      researchRequested: data['researchRequested'] ?? false,
+    );
+
+    try {
+      final detResult = await databases.listDocuments(
+        databaseId: databaseId,
+        collectionId: detectionsCollectionId,
+        queries: [Query.equal('recordings', doc.$id)]
+      );
+
+      if (detResult.documents.isNotEmpty) {
+        final det = detResult.documents.first;
+        final names = det.data['scientificName'] as List?;
+        final confs = det.data['confidenceLevel'] as List?;
+
+        if (names != null && names.isNotEmpty) {
+          rec.commonName = _sanitizeName(names.first.toString());
+          if (confs != null) {
+            final preds = <String, double>{};
+            for (int i = 0; i < names.length; i++) {
+              if (i < confs.length) {
+                final name = _sanitizeName(names[i].toString());
+                final conf = confs[i];
+                if (conf is num) {
+                  preds[name] = conf > 1.0 ? conf.toDouble() / 100.0 : conf.toDouble();
+                }
+              }
+            }
+            rec.predictions = preds;
+          }
+        }
+
+        if (confs != null && confs.isNotEmpty) {
+          final conf = confs.first;
+          if (conf is num) {
+            rec.confidence = conf > 1.0 ? conf.toDouble() / 100.0 : conf.toDouble();
+          }
+        }
+        rec.status = 'processed';
+      }
+    } catch (e) {
+      print("Appwrite: Error mapping detections for ${doc.$id}: $e");
+    }
+    return rec;
   }
 
   Future<void> _initUserAndDoc() async {
@@ -516,7 +533,7 @@ class AppwriteService extends GetxService {
         final confidence = detection.data['confidenceLevel'] as List<dynamic>?;
 
         if (scientificNames != null && scientificNames.isNotEmpty) {
-          recording.commonName = scientificNames.first.toString();
+          recording.commonName = _sanitizeName(scientificNames.first.toString());
           recording.status = 'processed';
           
           // Populate predictions map
@@ -524,10 +541,11 @@ class AppwriteService extends GetxService {
             final preds = <String, double>{};
             for (int i = 0; i < scientificNames.length; i++) {
               if (i < confidence.length) {
-                final name = scientificNames[i].toString();
+                final name = _sanitizeName(scientificNames[i].toString());
                 final conf = confidence[i];
                 if (conf is num) {
-                  preds[name] = conf.toDouble();
+                  // Normalize: if > 1, assume it's 0-100 range and convert to 0-1
+                  preds[name] = conf > 1.0 ? conf.toDouble() / 100.0 : conf.toDouble();
                 }
               }
             }
@@ -535,12 +553,9 @@ class AppwriteService extends GetxService {
           }
 
           if(confidence != null && confidence.isNotEmpty) {
-             // Handle Int to Double conversion
              final confVal = confidence.first;
-             if (confVal is int) {
-               recording.confidence = confVal.toDouble();
-             } else if (confVal is double) {
-               recording.confidence = confVal;
+             if (confVal is num) {
+               recording.confidence = confVal > 1.0 ? confVal.toDouble() / 100.0 : confVal.toDouble();
              }
           }
           
@@ -620,6 +635,41 @@ class AppwriteService extends GetxService {
     } catch (e) {
       print("Appwrite: Error deleting recording: $e");
       rethrow; // Re-throw to let controller handle it
+    }
+  }
+
+  Future<void> syncWithRemote() async {
+    if (_userId == null) return;
+    
+    try {
+      // 1. Fetch Remote
+      final remote = await getUserRecordings();
+      final storageService = Get.find<StorageService>();
+      
+      // 2. Sync remote to local storage
+      for (var rec in remote) {
+         final existing = storageService.recordings.firstWhereOrNull((r) => r.id == rec.id);
+         if (existing != null && existing.isLocal) {
+            final file = File(existing.path);
+            if (await file.exists()) {
+               rec.path = existing.path;
+            }
+         }
+         await storageService.updateRecording(rec);
+      }
+
+      // 3. Sync Deletions
+      final localRecordings = storageService.getRecordings();
+      final remoteIds = remote.map((e) => e.id).toSet();
+      
+      for (var local in localRecordings) {
+        if ((local.status == 'uploaded' || local.status == 'processed') && 
+            !remoteIds.contains(local.id)) {
+           await storageService.deleteRecording(local.id);
+        }
+      }
+    } catch (e) {
+      print("Appwrite: Sync Error: $e");
     }
   }
 
@@ -706,6 +756,11 @@ class AppwriteService extends GetxService {
       print("Error downloading file: $e");
       rethrow;
     }
+  }
+
+  String _sanitizeName(String name) {
+    if (!name.contains('_')) return name;
+    return name.split('_').first.trim();
   }
 }
 

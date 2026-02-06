@@ -47,24 +47,6 @@ class ModelDownloadService extends GetxService {
       sampleRate: 48000,
       inputSize: 144000,
     ),
-    AcousticModel(
-      id: 'birdnet_pi',
-      name: 'BirdNET-Pi (Global)',
-      description: 'Highly reliable identification engine used in research stations.',
-      downloadUrl: "https://raw.githubusercontent.com/mcguirepr89/BirdNET-Pi/main/model/BirdNET_GLOBAL_6K_V2.4_MData_Model_FP16.tflite",
-      labelsUrl: "https://raw.githubusercontent.com/kahst/BirdNET-Lite/main/model/labels.txt",
-      sampleRate: 48000,
-      inputSize: 144000,
-    ),
-    AcousticModel(
-      id: 'birdnet_lite',
-      name: 'BirdNET-Lite v2.0',
-      description: 'Optimized for older devices: 6,000 species with lower CPU usage.',
-      downloadUrl: "https://raw.githubusercontent.com/kahst/BirdNET-Lite/main/model/BirdNET_6K_GLOBAL_pub_model.tflite", // Attempting raw again with fixed headers
-      labelsUrl: "https://raw.githubusercontent.com/kahst/BirdNET-Lite/main/model/labels.txt",
-      sampleRate: 48000,
-      inputSize: 144000,
-    ),
   ];
 
   Future<bool> isModelDownloaded(String id) async {

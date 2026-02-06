@@ -47,11 +47,24 @@ class LoginView extends GetView<AuthController> {
                   // Email Field
                   TextField(
                     controller: controller.emailController,
+                    style: const TextStyle(color: Colors.black87, fontSize: 16),
                     decoration: InputDecoration(
                       labelText: 'Email',
-                      prefixIcon: const Icon(Icons.email_outlined),
+                      labelStyle: const TextStyle(color: Color(0xFF004D40), fontWeight: FontWeight.w500),
+                      hintText: 'your@email.com',
+                      hintStyle: TextStyle(color: Colors.grey[400]),
+                      prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF004D40)),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF004D40), width: 2),
                       ),
                       filled: true,
                       fillColor: Colors.grey[50],
@@ -64,22 +77,49 @@ class LoginView extends GetView<AuthController> {
                   Obx(() => TextField(
                     controller: controller.passwordController,
                     obscureText: controller.isObscure.value,
+                    style: const TextStyle(color: Colors.black87, fontSize: 16),
                     decoration: InputDecoration(
                       labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock_outline),
+                      labelStyle: const TextStyle(color: Color(0xFF004D40), fontWeight: FontWeight.w500),
+                      hintText: 'Minimum 8 characters',
+                      hintStyle: TextStyle(color: Colors.grey[400]),
+                      prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF004D40)),
                       suffixIcon: IconButton(
-                        icon: Icon(controller.isObscure.value ? Icons.visibility_off : Icons.visibility),
+                        icon: Icon(
+                          controller.isObscure.value ? Icons.visibility_off : Icons.visibility,
+                          color: const Color(0xFF004D40),
+                        ),
                         onPressed: controller.toggleObscure,
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF004D40), width: 2),
                       ),
                       filled: true,
                       fillColor: Colors.grey[50],
                     ),
                   )),
                   
-                  const SizedBox(height: 32),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: controller.isLoading.value ? null : controller.forgotPassword,
+                      child: const Text(
+                        'Forgot Password?',
+                        style: TextStyle(color: Color(0xFF004D40), fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
 
                   // Login Button
                   SizedBox(

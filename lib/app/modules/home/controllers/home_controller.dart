@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -9,17 +10,25 @@ import 'package:flutter_audio_capture/flutter_audio_capture.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:uuid/uuid.dart';
+import 'package:audio_waveforms/audio_waveforms.dart';
 
 import '../../../data/models/recording_model.dart';
 import '../../../data/services/appwrite_service.dart';
 import '../../../data/services/storage_service.dart';
 import '../../../data/services/location_service.dart';
 import '../../../data/services/audio_analysis_service.dart';
+import 'package:frontend/app/utils/snackbar_utils.dart';
 
 class HomeController extends GetxController {
   final FlutterAudioCapture _audioCapture = FlutterAudioCapture();
   final FlutterSoundPlayer player = FlutterSoundPlayer();
   final LocationService _locationService = Get.find<LocationService>();
+  
+  // Waveform Controllers
+  late PlayerController playerController;
+  
+  // Live Recording Amplitudes for custom visualization
+  final liveAmplitudes = <double>[].obs;
   
   // File Sink
   RandomAccessFile? _fileRaf;
@@ -52,6 +61,7 @@ class HomeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    _initWaveformControllers();
     _initPlayer();
     _preFetchLocation();
     _audioCapture.init(); // Initialize the capture plugin
@@ -64,17 +74,35 @@ class HomeController extends GetxController {
     });
   }
 
+  void _initWaveformControllers() {
+    playerController = PlayerController();
+  }
+
   @override
   void onClose() {
     _timer?.cancel();
     _audioCapture.stop();
     _fileRaf?.close();
     player.closePlayer();
+    
+    // Safe disposal of waveform controllers
+    try {
+      playerController.dispose();
+    } catch (e) {
+      print("Error disposing playerController: $e");
+    }
+    
     super.onClose();
   }
 
   void _initPlayer() async {
     await player.openPlayer();
+    player.setSubscriptionDuration(const Duration(milliseconds: 50));
+    player.onProgress?.listen((e) {
+      globalDuration.value = e.position;
+      // Sync player waveform
+      playerController.seekTo(e.position.inMilliseconds);
+    });
   }
   
   void _preFetchLocation() async {
@@ -107,25 +135,43 @@ class HomeController extends GetxController {
     nearbyRecordings.assignAll(all.take(5));
   }
 
+  final _isToggling = false.obs;
+
   Future<void> toggleRecording() async {
-    if (isRecording.value) {
-      if (globalDuration.value.inSeconds < 15) {
-        _showError('Keep recording! Minimum 15 seconds required.', isInfo: true);
-        return;
-      }
-      await _stopRecording();
-    } else {
-      if (_storageService.showRecordingInstructions) {
-        _showInstructionsDialog();
+    if (_isToggling.value) return;
+    _isToggling.value = true;
+    
+    try {
+      if (isRecording.value) {
+        if (globalDuration.value.inSeconds < 15) {
+          _showError('Keep recording! Minimum 15 seconds required.', isInfo: true);
+          return;
+        }
+        await _stopRecording();
       } else {
-        await _startRecording();
+        // Check permission FIRST
+        if (!await requestPermission(Permission.microphone)) {
+          _showError('Microphone permission required');
+          return;
+        }
+
+        if (_storageService.showRecordingInstructions) {
+          final shouldStart = await _showInstructionsDialog();
+          if (shouldStart) {
+            await _startRecording(skipPermissionCheck: true);
+          }
+        } else {
+          await _startRecording(skipPermissionCheck: true);
+        }
       }
+    } finally {
+      _isToggling.value = false;
     }
   }
 
-  void _showInstructionsDialog() {
+  Future<bool> _showInstructionsDialog() async {
     bool dontShowAgain = false;
-    Get.dialog(
+    final result = await Get.dialog<bool>(
       AlertDialog(
         title: const Row(
           children: [
@@ -160,7 +206,7 @@ class HomeController extends GetxController {
         ),
         actions: [
           TextButton(
-            onPressed: () => Get.back(),
+            onPressed: () => Get.back(result: false),
             child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
@@ -168,10 +214,7 @@ class HomeController extends GetxController {
               if (dontShowAgain) {
                 _storageService.showRecordingInstructions = false;
               }
-              // Close dialog immediately
-              Get.back();
-              // Start recording after dialog closes (non-blocking)
-              Future.microtask(() => _startRecording());
+              Get.back(result: true);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.teal,
@@ -184,6 +227,7 @@ class HomeController extends GetxController {
       ),
       barrierDismissible: false,
     );
+    return result ?? false;
   }
 
   Widget _buildInstructionItem(IconData icon, String text) {
@@ -199,11 +243,13 @@ class HomeController extends GetxController {
     );
   }
 
-  Future<void> _startRecording() async {
+  Future<void> _startRecording({bool skipPermissionCheck = false}) async {
     try {
-      if (!await requestPermission(Permission.microphone)) {
-         _showError('Microphone permission required');
-         return;
+      if (!skipPermissionCheck) {
+        if (!await requestPermission(Permission.microphone)) {
+           _showError('Microphone permission required');
+           return;
+        }
       }
       
       // Reset State
@@ -224,6 +270,9 @@ class HomeController extends GetxController {
       
       // Write Placeholder Header
       _writeWavHeader(0);
+      
+      // Clear live amplitudes for visualization
+      liveAmplitudes.clear();
       
       // Start Capture
       await _audioCapture.start(
@@ -248,20 +297,7 @@ class HomeController extends GetxController {
   }
 
   void _showError(String message, {bool isInfo = false}) {
-    if (Get.context != null) {
-      ScaffoldMessenger.of(Get.context!).showSnackBar(
-        SnackBar(
-          content: Text(message), 
-          backgroundColor: isInfo ? Colors.orange : Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } else {
-      Get.snackbar(isInfo ? 'Info' : 'Error', message, 
-        backgroundColor: isInfo ? Colors.orange : Colors.red, 
-        colorText: Colors.white
-      );
-    }
+    showCustomSnackBar(isInfo ? 'Info' : 'Error', message, isError: !isInfo);
   }
 
   int _callbackCount = 0;
@@ -289,7 +325,19 @@ class HomeController extends GetxController {
         _audioBuffer.clear();
       }
       
-      // 2. Write to WAV File (Convert Float -> Int16)
+      // 2. Update Waveform Visualization
+      if (samples.isNotEmpty) {
+        double sum = 0;
+        for (var s in samples) { sum += s * s; }
+        double rms = sqrt(sum / samples.length);
+        
+        liveAmplitudes.add(rms);
+        if (liveAmplitudes.length > 100) {
+          liveAmplitudes.removeAt(0);
+        }
+      }
+
+      // 3. Write to WAV File (Convert Float -> Int16)
       // Use ByteData to ensure Little Endian
       final byteData = ByteData(samples.length * 2);
       for (int i = 0; i < samples.length; i++) {
@@ -347,6 +395,21 @@ class HomeController extends GetxController {
     }
       
     isCompletedRecording.value = true;
+    _preparePlayerWaveform();
+  }
+
+  Future<void> _preparePlayerWaveform() async {
+    if (recordedFilePath.isEmpty) return;
+    try {
+      await playerController.preparePlayer(
+        path: recordedFilePath,
+        shouldExtractWaveform: true,
+        noOfSamples: 100,
+        volume: 0.0,
+      );
+    } catch (e) {
+      print("Review Waveform Error: $e");
+    }
   }
 
   Future<void> saveRecording() async {
@@ -408,15 +471,11 @@ class HomeController extends GetxController {
   }
 
   Future<void> startPlaying() async {
-    await player.startPlayer(fromURI: recordedFilePath);
+    await player.startPlayer(
+      fromURI: recordedFilePath,
+      whenFinished: () => stopPlaying(),
+    );
     isPlaying.value = true;
-    player.onProgress?.listen((e) {
-      globalDuration.value = e.position;
-      totalDuration = e.duration;
-      if (e.position >= e.duration) {
-        stopPlaying();
-      }
-    });
   }
 
   Future<void> pausePlaying() async {
@@ -433,7 +492,9 @@ class HomeController extends GetxController {
 
   Future<void> stopPlaying() async {
     await player.stopPlayer();
+    playerController.seekTo(0);
     isPlaying.value = false;
+    isPaused.value = false;
   }
 
   void reset() {
@@ -446,6 +507,7 @@ class HomeController extends GetxController {
     hasSpeechDetected = false;
     _analysisService.speechConfidence.value = 0.0;
     _analysisService.topPredictions.clear();
+    liveAmplitudes.clear();
   }
 
   // WAV Header Utils

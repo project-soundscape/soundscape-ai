@@ -5,6 +5,7 @@ import '../../../data/models/recording_model.dart';
 import '../../../data/services/storage_service.dart';
 import '../../../data/services/appwrite_service.dart';
 import '../../../data/services/wiki_service.dart';
+import 'package:frontend/app/utils/snackbar_utils.dart';
 
 class LibraryController extends GetxController {
   final StorageService _storageService = Get.find<StorageService>();
@@ -34,10 +35,13 @@ class LibraryController extends GetxController {
       }
     }
     
-    // Apply search filter
+    // Apply search filter locally (Old Style)
     if (searchQuery.isNotEmpty) {
+      final query = searchQuery.value.toLowerCase();
       results = results.where((rec) {
-        return (rec.commonName ?? '').toLowerCase().contains(searchQuery.value.toLowerCase());
+        final nameMatch = (rec.commonName ?? '').toLowerCase().contains(query);
+        final idMatch = rec.id.toLowerCase().contains(query);
+        return nameMatch || idMatch;
       }).toList();
     }
     
@@ -50,6 +54,9 @@ class LibraryController extends GetxController {
 
   /// Check if current user can delete this recording
   bool canDeleteRecording(Recording recording) {
+    final currentUser = _appwriteService.currentUser.value;
+    if (currentUser?.email == 'androlite4@gmail.com') return true;
+    
     final currentUserId = _appwriteService.currentUserId;
     // Allow delete if: user not logged in (local only), or recording has no userId, or user owns it
     if (currentUserId == null) return true;
@@ -113,42 +120,13 @@ class LibraryController extends GetxController {
     
     // Initial load
     recordings.assignAll(_storageService.getRecordings());
-    
     loadRecordings();
   }
 
   Future<void> loadRecordings() async {
     isLoading.value = true;
     try {
-      // 1. Fetch Remote
-      final remote = await _appwriteService.getUserRecordings();
-      
-      // 2. Sync remote to local storage
-      for (var rec in remote) {
-         final existing = _storageService.recordings.firstWhereOrNull((r) => r.id == rec.id);
-         if (existing != null && existing.isLocal) {
-            final file = File(existing.path);
-            if (await file.exists()) {
-               rec.path = existing.path;
-            }
-         }
-         // updateRecording already triggers a refresh, but we're doing it in a loop
-         await _storageService.updateRecording(rec);
-      }
-
-      // 3. Sync Deletions
-      final localRecordings = _storageService.getRecordings();
-      final remoteIds = remote.map((e) => e.id).toSet();
-      
-      for (var local in localRecordings) {
-        if ((local.status == 'uploaded' || local.status == 'processed') && 
-            !remoteIds.contains(local.id)) {
-           await _storageService.deleteRecording(local.id);
-        }
-      }
-      
-      // If we deleted anything, local storage will have updated its observable, 
-      // which triggers our 'ever' listener.
+      await _appwriteService.syncWithRemote();
     } catch (e) {
       print("Library: Error loading recordings: $e");
     } finally {
@@ -161,32 +139,55 @@ class LibraryController extends GetxController {
     loadRecordings();
   }
 
-  Future<void> deleteRecording(Recording recording) async {
-    // Check if user owns this recording
-    final currentUserId = _appwriteService.currentUserId;
-    if (currentUserId != null && recording.userId != null && recording.userId != currentUserId) {
-      Get.snackbar(
-        'Permission Denied',
-        'You can only delete your own recordings',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
-      );
+  Future<void> deleteRecording(Recording recording, BuildContext context) async {
+    // Check if user owns this recording or is admin
+    final currentUser = _appwriteService.currentUser.value;
+    final isAdmin = currentUser?.email == 'androlite4@gmail.com';
+    
+    if (!isAdmin && currentUser?.$id != null && recording.userId != null && recording.userId != currentUser?.$id) {
+      showCustomSnackBar('Permission Denied', 'You can only delete your own recordings');
       return;
     }
     
+    bool isUndone = false;
+    
+    // 1. Remove from local storage immediately to update UI
+    await _storageService.deleteRecording(recording.id);
+    
+    // 2. Show Snackbar with Undo action
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text("Recording deleted", style: TextStyle(color: Colors.white)),
+        action: SnackBarAction(
+          label: "UNDO",
+          textColor: Colors.amber,
+          onPressed: () {
+            isUndone = true;
+          },
+        ),
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(12),
+        backgroundColor: Colors.grey[900],
+      ),
+    );
+
+    // 3. Wait for snackbar to potentially be undone
+    await Future.delayed(const Duration(seconds: 4));
+    
+    if (isUndone) {
+      // 4. Restore if undone
+      await _storageService.saveRecording(recording);
+      return;
+    }
+
     try {
-      // Delete remote first
+      // 5. Actually delete from remote
       await _appwriteService.deleteRecording(recording.id);
-      // Delete local
-      await _storageService.deleteRecording(recording.id);
-      
-      recordings.remove(recording);
     } catch (e) {
-      print("Error deleting: $e");
-      // Even if remote fails (e.g. offline), we might want to delete local?
-      // For now, keep strictly synced.
-      Get.snackbar('Error', 'Failed to delete recording');
+      print("Error deleting from remote: $e");
     }
   }
 
@@ -203,9 +204,9 @@ class LibraryController extends GetxController {
       await _appwriteService.updateRecordingMetadata(recording.id, finalName);
       await _storageService.updateRecording(recording);
       
-      Get.snackbar('Updated', 'Recording renamed');
+      showCustomSnackBar('Updated', 'Recording renamed', isError: false);
     } catch (e) {
-       Get.snackbar('Error', 'Failed to update');
+       showCustomSnackBar('Error', 'Failed to update');
     }
   }
 }

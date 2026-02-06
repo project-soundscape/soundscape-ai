@@ -259,10 +259,18 @@ class DetailsController extends GetxController {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.purple)),
-          ),
+          Obx(() => TextButton(
+            onPressed: () {
+              if (Get.isDialogOpen ?? false) Get.back();
+            },
+            child: Text(
+              researchProgress.value >= 1.0 ? 'Done' : 'OK', 
+              style: const TextStyle(
+                fontWeight: FontWeight.bold, 
+                color: Colors.purple
+              )
+            ),
+          )),
         ],
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
@@ -335,6 +343,10 @@ class DetailsController extends GetxController {
 
       researchProgress.value = 1.0;
       
+      // Close dialog automatically after a short delay
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (Get.isDialogOpen ?? false) Get.back();
+
       Get.snackbar(
         'Success',
         'Data sent to research group successfully!',
@@ -345,10 +357,13 @@ class DetailsController extends GetxController {
       );
     } catch (e) {
       print("Research Error: $e");
-      researchProgress.value = 0.0;
+      // Don't reset to 0, keep it where it failed for context
+      
+      if (Get.isDialogOpen ?? false) Get.back();
+
       Get.snackbar(
         'Research Submission Failed',
-        'Could not send data to WhatsApp: $e',
+        'Could not send data: $e',
         backgroundColor: Colors.red,
         colorText: Colors.white,
         snackPosition: SnackPosition.BOTTOM,
@@ -366,6 +381,18 @@ class DetailsController extends GetxController {
   Future<void> openEBird(String scientificName) async {
     final query = Uri.encodeComponent(scientificName);
     final url = 'https://ebird.org/species/search?query=$query';
+    await launchURL(url);
+  }
+
+  Future<void> openInMaps() async {
+    if (recording.latitude == null || recording.longitude == null) return;
+    
+    final lat = recording.latitude;
+    final lng = recording.longitude;
+    final url = Platform.isIOS 
+        ? 'https://maps.apple.com/?q=$lat,$lng' 
+        : 'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
+        
     await launchURL(url);
   }
   
@@ -415,10 +442,12 @@ class DetailsController extends GetxController {
            path: localFilePath!,
            shouldExtractWaveform: true,
            noOfSamples: 100,
-           volume: 1.0,
+           volume: 0.0,
          );
+         // Use waveform duration as initial truth for UI consistency
          if (waveformController.maxDuration > 0) {
             totalDuration.value = Duration(milliseconds: waveformController.maxDuration);
+            remainingTime.value = totalDuration.value;
          }
       }
     } catch (e) {
@@ -428,29 +457,44 @@ class DetailsController extends GetxController {
 
   Future<void> _initPlayer() async {
     await player.openPlayer();
-    player.setSubscriptionDuration(const Duration(milliseconds: 100));
+    player.setSubscriptionDuration(const Duration(milliseconds: 50)); // Faster updates for smoother visual
     player.onProgress?.listen((e) {
       currentPosition.value = e.position;
-      totalDuration.value = e.duration;
-      remainingTime.value = e.duration - e.position;
+      
+      // Update total duration if player gives a more accurate one, 
+      // but keep UI consistent with waveform bounds
+      if (e.duration.inMilliseconds > 0) {
+        totalDuration.value = e.duration;
+      }
+      
+      remainingTime.value = totalDuration.value - e.position;
+      
+      // Master Sync: Push audio position to waveform
+      waveformController.seekTo(e.position.inMilliseconds);
       
       // Perform YAMNet analysis during playback
       _analyzeChunkAt(e.position);
+    });
 
-      if (e.position >= e.duration) {
-        stopPlayer();
+    // Handle manual seeking from waveform
+    waveformController.onCurrentDurationChanged.listen((ms) {
+      // Only seek player if the change is significant (manual seek) 
+      // and not triggered by our own seekTo above
+      final int diff = (ms - currentPosition.value.inMilliseconds).abs();
+      if (diff > 300) { 
+        player.seekToPlayer(Duration(milliseconds: ms));
       }
     });
   }
 
   Future<void> stopPlayer() async {
     await player.stopPlayer();
+    // Reset waveform to start
+    waveformController.seekTo(0);
     isPlaying.value = false;
     currentPosition.value = Duration.zero;
     remainingTime.value = totalDuration.value;
     _lastAnalysisTime = const Duration(seconds: -1); // Reset throttle
-    // Note: topPredictions are intentionally NOT cleared here 
-    // so users can see the last analysis results.
   }
 
   Future<void> _analyzeChunkAt(Duration position) async {
@@ -578,7 +622,13 @@ class DetailsController extends GetxController {
   @override
   void onClose() {
     player.closePlayer();
-    waveformController.dispose();
+    
+    try {
+      waveformController.dispose();
+    } catch (e) {
+      print("Error disposing waveformController: $e");
+    }
+    
     _audioFileHandle?.close();
     _analysisService.topPredictions.clear();
     super.onClose();
@@ -596,7 +646,10 @@ class DetailsController extends GetxController {
           await player.resumePlayer();
         } else {
           // Use default codec detection instead of forcing aacMP4
-          await player.startPlayer(fromURI: localFilePath);
+          await player.startPlayer(
+            fromURI: localFilePath,
+            whenFinished: () => stopPlayer(),
+          );
         }
         isPlaying.value = true;
       }

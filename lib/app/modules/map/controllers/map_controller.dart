@@ -12,6 +12,7 @@ import '../../../data/services/storage_service.dart';
 import '../../../data/services/location_service.dart';
 import '../../../data/services/wiki_service.dart';
 import '../../../data/services/notification_service.dart';
+import '../../../data/services/appwrite_service.dart';
 import '../../../routes/app_pages.dart';
 
 class SoundMapController extends GetxController {
@@ -19,6 +20,7 @@ class SoundMapController extends GetxController {
   final LocationService _locationService = Get.find<LocationService>();
   final WikiService _wikiService = Get.put(WikiService());
   final NotificationService _notificationService = Get.find<NotificationService>();
+  final AppwriteService _appwriteService = Get.find<AppwriteService>();
   
   final markers = <Marker>[].obs;
   final visibleRecordings = <Recording>[].obs;
@@ -44,15 +46,21 @@ class SoundMapController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    _determineInitialPosition();
-    _notificationService.requestPermissions();
     
     // Listen to changes
     ever(_storageService.recordings, (_) => loadMarkers());
     ever(searchQuery, (_) => loadMarkers());
     ever(filterOptions, (_) => loadMarkers());
     
+    _appwriteService.syncWithRemote();
     loadMarkers();
+  }
+
+  @override
+  void onReady() {
+    super.onReady();
+    _determineInitialPosition();
+    _notificationService.requestPermissions();
   }
 
   @override
@@ -184,18 +192,19 @@ class SoundMapController extends GetxController {
     final query = searchQuery.value;
     final filters = filterOptions.value;
     
-    // 1. Text Search
+    // 1. Text & ID Search (Local)
     if (query.isNotEmpty) {
       final lowerQuery = query.toLowerCase();
       recordings = recordings.where((rec) {
-        final name = rec.commonName?.toLowerCase() ?? '';
-        final notes = rec.notes?.toLowerCase() ?? '';
-        final tags = rec.tags.join(' ').toLowerCase();
-        return name.contains(lowerQuery) || notes.contains(lowerQuery) || tags.contains(lowerQuery);
+        final nameMatch = (rec.commonName ?? '').toLowerCase().contains(lowerQuery);
+        final notesMatch = (rec.notes ?? '').toLowerCase().contains(lowerQuery);
+        final tagsMatch = rec.tags.join(' ').toLowerCase().contains(lowerQuery);
+        final idMatch = rec.id.toLowerCase().contains(lowerQuery);
+        return nameMatch || notesMatch || tagsMatch || idMatch;
       }).toList();
     }
     
-    // 2. Apply Filters
+    // 2. Apply Filters (Local)
     if (filters.status != 'All') {
        recordings = recordings.where((r) => r.status.toLowerCase() == filters.status.toLowerCase()).toList();
     }
@@ -339,6 +348,12 @@ class SoundMapController extends GetxController {
     } else {
       _determineInitialPosition(); 
     }
+  }
+
+  void resetRotation() {
+    try {
+      mapController.rotate(0);
+    } catch (_) {}
   }
 }
 
