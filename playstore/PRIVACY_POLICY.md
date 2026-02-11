@@ -1,6 +1,6 @@
 # Privacy Policy for SoundScape
 
-**Last Updated**: February 3, 2026
+**Last Updated**: February 11, 2026
 
 ## Introduction
 
@@ -111,5 +111,5 @@ By using SoundScape, you consent to this Privacy Policy.
 ---
 
 **SoundScape**  
-Version 1.0.0  
+Version 2.5.0  
 © 2026 Muhammed Shabeer OP

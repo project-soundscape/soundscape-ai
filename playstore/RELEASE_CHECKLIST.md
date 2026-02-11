@@ -7,8 +7,8 @@
 - [x] App builds successfully (`flutter build appbundle --release`)
 - [x] Signing key configured (`android/key.properties`)
 - [x] App bundle generated (`build/app/outputs/bundle/release/app-release.aab`)
-- [ ] Version number updated in `pubspec.yaml`
-- [ ] Version code incremented for updates
+- [x] Version number updated in `pubspec.yaml`
+- [x] Version code incremented for updates
 
 ### 2. Code Quality
 
@@ -23,7 +23,7 @@
 - [ ] App icon (512x512) ready
 - [ ] Feature graphic (1024x500) ready
 - [ ] Screenshots (min 2) captured
-- [ ] Store listing text finalized
+- [x] Store listing text finalized
 - [ ] Privacy policy URL live
 
 ---

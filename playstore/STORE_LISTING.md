@@ -8,7 +8,7 @@
 | **Package Name** | com.soundscape.frontend |
 | **Category** | Education |
 | **Content Rating** | Everyone |
-| **Version** | 1.0.0 |
+| **Version** | 2.5.0 |
 
 ---
 
@@ -102,17 +102,17 @@ Made with ❤️ for bird lovers everywhere.
 ## What's New (Release Notes - 500 characters max)
 
 ```
-Version 1.0.0
-• Initial release
+Version 2.5.0
 • AI-powered bird identification with BirdNET model
 • Real-time audio recording with waveform
-• GPS tagging for all recordings
-• Interactive map view
-• Offline-first functionality
+• GPS tagging & Interactive map view
 • Cloud sync with Appwrite
 • Speech detection for privacy
-• Wikipedia species information
-• Library with search & filter
+• [NEW] Re-analyze recordings with improved models
+• [NEW] Filter library by "My Recordings"
+• [NEW] Improved delete permissions for community safety
+• [FIX] Accurate confidence score display
+• [FIX] Improved Wikipedia species lookup
 ```
 
 ---
