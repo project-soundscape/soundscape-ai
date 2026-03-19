@@ -47,6 +47,46 @@ class ModelDownloadService extends GetxService {
       sampleRate: 48000,
       inputSize: 144000,
     ),
+    AcousticModel(
+      id: 'mammal_net_v1',
+      name: 'MammalNET v1.0',
+      description: 'Identifies 300+ terrestrial mammals including primates, canines, and felines.',
+      downloadUrl: "https://example.com/models/mammal_net_v1.tflite", // Placeholder URL
+      labelsUrl: "https://example.com/models/mammal_net_v1_labels.txt", // Placeholder URL
+      isArchive: false,
+      sampleRate: 16000,
+      inputSize: 15600,
+    ),
+    AcousticModel(
+      id: 'insect_net_v2',
+      name: 'EntoAcoustics (Insects) v2.0',
+      description: 'Specialized model for cicadas, crickets, katydids, and bees.',
+      downloadUrl: "https://example.com/models/insect_net_v2.tflite", // Placeholder URL
+      labelsUrl: "https://example.com/models/insect_net_v2_labels.txt", // Placeholder URL
+      isArchive: false,
+      sampleRate: 48000,
+      inputSize: 144000,
+    ),
+    AcousticModel(
+      id: 'amphibian_net',
+      name: 'AmphibiaNET',
+      description: 'Detects frogs and toads globally (400+ species).',
+      downloadUrl: "https://example.com/models/amphibian_net.tflite", // Placeholder URL
+      labelsUrl: "https://example.com/models/amphibian_net_labels.txt", // Placeholder URL
+      isArchive: false,
+      sampleRate: 16000,
+      inputSize: 15600,
+    ),
+    AcousticModel(
+      id: 'marine_net_v1',
+      name: 'MarineAcoustics v1.0',
+      description: 'Underwater hydrophone model: whales, dolphins, and snapping shrimp.',
+      downloadUrl: "https://example.com/models/marine_net_v1.tflite", // Placeholder URL
+      labelsUrl: "https://example.com/models/marine_net_v1_labels.txt", // Placeholder URL
+      isArchive: false,
+      sampleRate: 48000,
+      inputSize: 144000,
+    ),
   ];
 
   Future<bool> isModelDownloaded(String id) async {
