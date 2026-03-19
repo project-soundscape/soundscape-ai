@@ -36,14 +36,27 @@ class OfflineMapService extends GetxService {
     int downloaded = 0;
     final cacheManager = DefaultCacheManager();
 
-    for (String url in urls) {
+    // Download in chunks concurrently
+    const chunkSize = 20;
+    for (int i = 0; i < urls.length; i += chunkSize) {
       if (!isDownloading.value) break; // Allow cancellation
-      try {
-        await cacheManager.downloadFile(url);
-      } catch (e) {
-        print("Failed to download tile: $url");
-      }
-      downloaded++;
+
+      final end = (i + chunkSize < urls.length) ? i + chunkSize : urls.length;
+      final chunkUrls = urls.sublist(i, end);
+
+      await Future.wait(chunkUrls.map((url) async {
+        try {
+          // Check if already in cache before network call
+          final fileInfo = await cacheManager.getFileFromCache(url);
+          if (fileInfo == null) {
+            await cacheManager.downloadFile(url);
+          }
+        } catch (e) {
+          print("Failed to download tile: $url");
+        }
+      }));
+
+      downloaded += chunkUrls.length;
       progress.value = downloaded / urls.length;
     }
 
