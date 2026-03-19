@@ -158,12 +158,14 @@ class AudioAnalysisService extends GetxService {
 
   // Pre-processing for denoising
   List<double> _applyDenoise(List<double> input) {
-     // 1. RMS & Auto-Gain
-     double sum = 0;
-     for(var s in input) {
-       sum += s*s;
+     // 1. RMS & Auto-Gain (Optimized array traversal)
+     double sum = 0.0;
+     final int len = input.length;
+     for (int i = 0; i < len; i++) {
+       final s = input[i];
+       sum += s * s;
      }
-     double rms = sqrt(sum / input.length);
+     double rms = sqrt(sum / len);
      
      // Target RMS ~ 0.1 (-20dB). Max Gain 5x.
      double gain = 1.0;
@@ -178,11 +180,16 @@ class AudioAnalysisService extends GetxService {
      // Threshold: Slightly below average noise
      double threshold = pow(10, (noiseFloorDb - 105) / 20).toDouble();
      
-     return input.map((s) {
-       double val = s * gain;
-       if (val.abs() < threshold) return 0.0;
-       return val;
-     }).toList();
+     // Faster pre-allocated list rather than .map
+     final List<double> result = List<double>.filled(len, 0.0);
+     for (int i = 0; i < len; i++) {
+       double val = input[i] * gain;
+       if (val.abs() >= threshold) {
+         result[i] = val;
+       }
+     }
+
+     return result;
   }
 
   void analyze(List<double> buffer) {
