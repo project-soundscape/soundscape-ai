@@ -36,6 +36,9 @@ class AudioAnalysisService extends GetxService {
   final RxList<MapEntry<String, double>> topPredictions = <MapEntry<String, double>>[].obs;
   final RxBool isModelLoading = false.obs;
   
+  // Acoustic Complexity Index / Bioacoustic Score
+  final RxDouble currentAcousticScore = 0.0.obs;
+
   bool get isReady => _interpreter != null && _labels.isNotEmpty;
 
   @override
@@ -187,6 +190,9 @@ class AudioAnalysisService extends GetxService {
     if (buffer.length < currentInputSize) return;
 
     try {
+      // Calculate Acoustic Complexity (Bioacoustic Score)
+      _calculateAcousticScore(buffer);
+
       // 1. Initial Inference
       var output = _runInference(buffer.sublist(0, currentInputSize));
       
@@ -244,10 +250,26 @@ class AudioAnalysisService extends GetxService {
       
       scores.sort((a, b) => b.value.compareTo(a.value));
       
-      final top5 = scores.take(5).map((e) {
-        final label = _labels.length > e.key ? _labels[e.key] : "Unknown";
-        return MapEntry(label, e.value);
-      }).toList();
+      // Anomaly detection check: High audio energy but very low max confidence for known classes
+      double rms = 0;
+      if (buffer.isNotEmpty) {
+         double sumSq = 0;
+         for (var s in buffer.take(currentInputSize)) sumSq += s * s;
+         rms = sqrt(sumSq / currentInputSize);
+      }
+
+      List<MapEntry<String, double>> top5;
+      final maxScore = scores.first.value;
+
+      // Thresholds: rms > 0.05 implies decent sound energy, maxScore < 0.20 implies low confidence
+      if (rms > 0.05 && maxScore < 0.20) {
+        top5 = [const MapEntry("Unknown Anomaly (Needs Review)", 1.0)];
+      } else {
+        top5 = scores.take(5).map((e) {
+          final label = _labels.length > e.key ? _labels[e.key] : "Unknown";
+          return MapEntry(label, e.value);
+        }).toList();
+      }
       
       topPredictions.assignAll(top5);
       if (top5.isNotEmpty) {
@@ -256,5 +278,50 @@ class AudioAnalysisService extends GetxService {
     } catch (e) {
       print("AudioAnalysis: Inference Failed: $e");
     }
+  }
+
+  // Very simplified temporal Acoustic Complexity calculation
+  void _calculateAcousticScore(List<double> buffer) {
+    if (buffer.isEmpty) return;
+
+    // Divide buffer into small chunks (e.g. 10ms)
+    int samplesPerChunk = (currentSampleRate * 0.01).toInt();
+    if (samplesPerChunk == 0) samplesPerChunk = 160;
+
+    List<double> chunkRms = [];
+    for (int i = 0; i < buffer.length; i += samplesPerChunk) {
+      int end = min(i + samplesPerChunk, buffer.length);
+      double sum = 0;
+      for (int j = i; j < end; j++) {
+        sum += buffer[j] * buffer[j];
+      }
+      chunkRms.add(sqrt(sum / (end - i)));
+    }
+
+    if (chunkRms.length < 2) return;
+
+    // Calculate absolute difference between consecutive chunks
+    double totalVariation = 0;
+    double totalSum = 0;
+    for (int i = 1; i < chunkRms.length; i++) {
+      totalVariation += (chunkRms[i] - chunkRms[i - 1]).abs();
+      totalSum += chunkRms[i];
+    }
+
+    // Avoid division by zero
+    if (totalSum < 0.0001) {
+       currentAcousticScore.value = 0.0;
+       return;
+    }
+
+    // Normalized index
+    double aci = totalVariation / totalSum;
+
+    // Scale ACI to a 0-100 "Bioacoustic Health" score
+    // Typical ACI values depend on noise. This is an arbitrary scaling for the UI.
+    double scaledScore = (aci * 100).clamp(0.0, 100.0);
+
+    // Exponential smoothing for stability
+    currentAcousticScore.value = (currentAcousticScore.value * 0.7) + (scaledScore * 0.3);
   }
 }

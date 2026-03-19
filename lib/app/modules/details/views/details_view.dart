@@ -852,6 +852,12 @@ class DetailsView extends GetView<DetailsController> {
                 'ID',
                 controller.recording.id.substring(0, 8),
               ),
+              if (controller.recording.acousticScore != null)
+                _buildMetaItem(
+                  context,
+                  'Bioacoustic Health Score',
+                  '${controller.recording.acousticScore!.toStringAsFixed(1)} / 100',
+                ),
 
               const SizedBox(height: 24),
               const Text(

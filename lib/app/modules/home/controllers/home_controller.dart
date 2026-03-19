@@ -44,6 +44,10 @@ class HomeController extends GetxController {
   RxBool isCompletedRecording = false.obs;
   RxBool isLoading = false.obs;
 
+  // Sentry / Auto-Record Mode
+  RxBool isSentryMode = false.obs;
+  Timer? _sentryTimer;
+
   final nearbyRecordings = <Recording>[].obs;
   Rx<Duration> globalDuration = Duration.zero.obs;
   Duration? totalDuration;
@@ -142,9 +146,15 @@ class HomeController extends GetxController {
     _isToggling.value = true;
     
     try {
+      if (isSentryMode.value) {
+        await toggleSentryMode();
+        return;
+      }
+
       if (isRecording.value) {
         if (globalDuration.value.inSeconds < 15) {
           _showError('Keep recording! Minimum 15 seconds required.', isInfo: true);
+          _isToggling.value = false;
           return;
         }
         await _stopRecording();
@@ -152,21 +162,95 @@ class HomeController extends GetxController {
         // Check permission FIRST
         if (!await requestPermission(Permission.microphone)) {
           _showError('Microphone permission required');
+          _isToggling.value = false;
           return;
         }
 
         if (_storageService.showRecordingInstructions) {
           final shouldStart = await _showInstructionsDialog();
           if (shouldStart) {
-            await _startRecording(skipPermissionCheck: true);
+            await _startRecording(); // skipPermissionCheck was removed
           }
         } else {
-          await _startRecording(skipPermissionCheck: true);
+          await _startRecording(); // skipPermissionCheck was removed
         }
       }
+    } catch (e) {
+      print("Error in toggleRecording: $e");
     } finally {
       _isToggling.value = false;
     }
+  }
+
+  Future<void> toggleSentryMode() async {
+    if (isSentryMode.value) {
+      // Turn off sentry mode
+      isSentryMode.value = false;
+      _sentryTimer?.cancel();
+      if (isRecording.value) {
+        await _stopRecording();
+        discardRecording(); // Toss whatever partial buffer it was listening to
+      }
+      _showError('Sentry Mode Disabled', isInfo: true);
+    } else {
+      // Turn on sentry mode
+      if (!await requestPermission(Permission.microphone)) {
+         _showError('Microphone permission required');
+         return;
+      }
+
+      // Stop regular recording if active
+      if (isRecording.value) {
+         await _stopRecording();
+         discardRecording();
+      }
+
+      isSentryMode.value = true;
+      _showError('Sentry Mode Enabled - Listening for wildlife...', isInfo: true);
+      _startSentryCycle();
+    }
+  }
+
+  void _startSentryCycle() async {
+     if (!isSentryMode.value) return;
+
+     // Start a background recording
+     await _startRecording();
+
+     // Evaluate the buffer every 15 seconds
+     _sentryTimer?.cancel();
+     _sentryTimer = Timer(const Duration(seconds: 15), () async {
+       if (!isSentryMode.value) return;
+
+       // Stop the current 15s chunk
+       await _stopRecording();
+
+       // Check findings
+       bool foundWildlife = false;
+       final predictions = _analysisService.topPredictions;
+
+       if (predictions.isNotEmpty && !hasSpeechDetected) {
+          final topMatch = predictions.first;
+          // E.g. Top match > 60% confidence and not silence/anomaly
+          if (topMatch.value > 0.6 && topMatch.key != 'Silence' && !topMatch.key.contains('Unknown')) {
+             foundWildlife = true;
+          }
+       }
+
+       if (foundWildlife) {
+          // Auto-save the clip
+          await saveRecording();
+          _showError('Sentry: Wildlife detected & saved!', isInfo: true);
+       } else {
+          // Discard the boring clip
+          discardRecording();
+       }
+
+       // Restart cycle
+       if (isSentryMode.value) {
+         _startSentryCycle();
+       }
+     });
   }
 
   Future<bool> _showInstructionsDialog() async {
@@ -243,14 +327,9 @@ class HomeController extends GetxController {
     );
   }
 
-  Future<void> _startRecording({bool skipPermissionCheck = false}) async {
+  Future<void> _startRecording() async {
     try {
-      if (!skipPermissionCheck) {
-        if (!await requestPermission(Permission.microphone)) {
-           _showError('Microphone permission required');
-           return;
-        }
-      }
+      // We assume permissions are requested prior to calling this method
       
       // Reset State
       _dataSize = 0;
@@ -259,6 +338,7 @@ class HomeController extends GetxController {
       globalDuration.value = Duration.zero;
       _analysisService.speechConfidence.value = 0.0;
       _analysisService.topPredictions.clear();
+      _analysisService.currentAcousticScore.value = 0.0;
 
       // Create File
       final dir = await getApplicationDocumentsDirectory();
@@ -426,6 +506,7 @@ class HomeController extends GetxController {
       latitude: _recordingLocation?.latitude,
       longitude: _recordingLocation?.longitude,
       status: 'pending',
+      acousticScore: _analysisService.currentAcousticScore.value,
     );
 
     await _storageService.saveRecording(recording);
@@ -501,12 +582,14 @@ class HomeController extends GetxController {
     isPlaying.value = false;
     isPaused.value = false;
     isRecording.value = false;
+    // Don't kill Sentry mode state here, let toggleSentryMode manage it
     globalDuration.value = Duration.zero;
     recordedFilePath = '';
     isCompletedRecording.value = false;
     hasSpeechDetected = false;
     _analysisService.speechConfidence.value = 0.0;
     _analysisService.topPredictions.clear();
+    _analysisService.currentAcousticScore.value = 0.0;
     liveAmplitudes.clear();
   }
 

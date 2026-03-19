@@ -121,6 +121,11 @@ class SettingsView extends GetView<SettingsController> {
                     ),
                   ]),
                   const SizedBox(height: 24),
+                  _buildSectionTitle('Offline Features'),
+                  _buildSettingsCard(context, [
+                    _buildOfflineMapTile(context),
+                  ]),
+                  const SizedBox(height: 24),
                   _buildSectionTitle('Diagnostics'),
                   _buildSettingsCard(context, [
                     _buildActionTile(
@@ -408,5 +413,67 @@ class SettingsView extends GetView<SettingsController> {
       ),
       child: const Text('GET', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
     );
+  }
+
+  Widget _buildOfflineMapTile(BuildContext context) {
+    return Obx(() {
+      final isDownloading = controller.isMapDownloading.value;
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.map_outlined, color: Colors.blue),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Offline Map Region', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text('Download current area (10km radius) for wilderness use.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    ],
+                  ),
+                ),
+                if (!isDownloading)
+                  IconButton(
+                    icon: const Icon(Icons.download, color: Colors.blue),
+                    onPressed: controller.downloadLocalRegion,
+                  )
+                else
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.red),
+                    onPressed: controller.cancelMapDownload,
+                  ),
+              ],
+            ),
+            if (isDownloading || controller.mapDownloadStatus.value.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              LinearProgressIndicator(
+                value: isDownloading ? controller.mapDownloadProgress.value : 1.0,
+                backgroundColor: Colors.grey[200],
+                color: Colors.blue,
+                minHeight: 6,
+                borderRadius: BorderRadius.circular(3),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                controller.mapDownloadStatus.value,
+                style: const TextStyle(fontSize: 11, color: Colors.blue)
+              ),
+            ],
+          ],
+        ),
+      );
+    });
   }
 }
