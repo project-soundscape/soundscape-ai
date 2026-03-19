@@ -10,6 +10,7 @@ class Recording {
   List<String> tags;
   String status; // 'pending', 'uploaded', 'processed'
   String? commonName;
+  double? acousticScore;
   double? confidence;
   String? notes;
   String? streamUrl;
@@ -27,6 +28,7 @@ class Recording {
     this.tags = const [],
     this.status = 'pending',
     this.commonName,
+    this.acousticScore,
     this.confidence,
     this.notes,
     this.streamUrl,
@@ -46,6 +48,7 @@ class Recording {
       'tags': tags,
       'status': status,
       'commonName': commonName,
+      'acousticScore': acousticScore,
       'confidence': confidence,
       'notes': notes,
       'streamUrl': streamUrl,
@@ -66,6 +69,7 @@ class Recording {
       tags: List<String>.from(map['tags']),
       status: map['status'],
       commonName: map['commonName'],
+      acousticScore: map['acousticScore'],
       confidence: map['confidence'],
       notes: map['notes'],
       streamUrl: map['streamUrl'],

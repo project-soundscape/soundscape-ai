@@ -5,6 +5,8 @@ import '../../../data/services/appwrite_service.dart';
 import '../../../data/services/storage_service.dart';
 import '../../../data/services/model_download_service.dart';
 import '../../../data/services/audio_analysis_service.dart';
+import '../../../data/services/offline_map_service.dart';
+import '../../../data/services/location_service.dart';
 import '../../../routes/app_pages.dart';
 import '../../map/controllers/map_controller.dart';
 
@@ -13,6 +15,8 @@ class SettingsController extends GetxController {
   final _storageService = Get.find<StorageService>();
   final _modelDownloadService = Get.find<ModelDownloadService>();
   final _analysisService = Get.find<AudioAnalysisService>();
+  final _offlineMapService = Get.find<OfflineMapService>();
+  final _locationService = Get.find<LocationService>();
   
   final appVersion = ''.obs;
   
@@ -153,4 +157,32 @@ class SettingsController extends GetxController {
       Get.snackbar('Error', e.toString().replaceAll('Exception: ', ''), backgroundColor: Colors.red, colorText: Colors.white);
     }
   }
+
+  // Offline Maps access
+  RxBool get isMapDownloading => _offlineMapService.isDownloading;
+  RxDouble get mapDownloadProgress => _offlineMapService.progress;
+  RxString get mapDownloadStatus => _offlineMapService.status;
+
+  Future<void> downloadLocalRegion() async {
+    final loc = await _locationService.getLastKnownLocation();
+    if (loc == null) {
+       Get.snackbar('Error', 'Could not get current location.', backgroundColor: Colors.red, colorText: Colors.white);
+       return;
+    }
+
+    // Create a bounding box of roughly 10km around the user
+    double deltaLat = 0.09;
+    double deltaLng = 0.09;
+
+    _offlineMapService.downloadRegion(
+      loc.latitude - deltaLat,
+      loc.longitude - deltaLng,
+      loc.latitude + deltaLat,
+      loc.longitude + deltaLng,
+      minZoom: 12,
+      maxZoom: 15
+    );
+  }
+
+  void cancelMapDownload() => _offlineMapService.cancelDownload();
 }

@@ -251,9 +251,18 @@ class HomeView extends GetView<HomeController> {
                 }),
                 
                 const Spacer(),
-                Obx(() => controller.isRecording.value 
-                  ? const Text("Recording... Keep device steady.", style: TextStyle(color: Colors.grey))
-                  : _buildNearbySection(context)
+                Obx(() => controller.isSentryMode.value
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.security, color: Colors.orange, size: 16),
+                        const SizedBox(width: 8),
+                        Text("SENTRY MODE ACTIVE", style: TextStyle(color: Colors.orange[800], fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                      ],
+                    )
+                  : controller.isRecording.value
+                    ? const Text("Recording... Keep device steady.", style: TextStyle(color: Colors.grey))
+                    : _buildNearbySection(context)
                 ),
                 const SizedBox(height: 20),
               ],

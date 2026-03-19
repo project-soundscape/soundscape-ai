@@ -12,6 +12,7 @@ import 'app/data/services/notification_service.dart';
 import 'app/data/services/storage_service.dart';
 import 'app/data/services/sync_service.dart';
 import 'app/data/services/wiki_service.dart';
+import 'app/data/services/offline_map_service.dart';
 import 'app/routes/app_pages.dart';
 import 'package:frontend/app/utils/snackbar_utils.dart';
 
@@ -26,6 +27,7 @@ void main() async {
   Get.put(ModelDownloadService());
   Get.put(LocationService());
   Get.put(NoiseService());
+  Get.put(OfflineMapService());
   await Get.putAsync(() => SyncService().init());
 
   runApp(
