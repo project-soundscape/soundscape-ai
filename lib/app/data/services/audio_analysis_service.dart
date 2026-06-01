@@ -112,9 +112,17 @@ class AudioAnalysisService extends GetxService {
       final inputTensor = _interpreter!.getInputTensor(0);
       currentInputSize = inputTensor.shape.last;
       
-      // BirdNET variants typically use 48kHz, others might use 16kHz
-      currentSampleRate = id.contains('birdnet') ? 48000 : 16000;
-      isPerch = id.contains('birdnet'); 
+      // BirdNET variants use 48kHz, Perch uses 32kHz, others (YAMNet) use 16kHz
+      if (id.contains('birdnet')) {
+        currentSampleRate = 48000;
+        isPerch = true; 
+      } else if (id.contains('perch')) {
+        currentSampleRate = 32000;
+        isPerch = true; 
+      } else {
+        currentSampleRate = 16000;
+        isPerch = false;
+      }
 
       if (await labelsFile.exists()) {
         final lines = await labelsFile.readAsLines();

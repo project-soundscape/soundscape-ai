@@ -40,52 +40,27 @@ class ModelDownloadService extends GetxService {
     AcousticModel(
       id: 'birdnet_v2.4',
       name: 'BirdNET-Analyzer v2.4',
-      description: 'The Gold Standard: 6,500+ species with high precision. (Kaggle Bundle)',
-      downloadUrl: "https://www.kaggle.com/api/v1/models/shadiakiki1/birdnet-analyzer/tfLite/birdnet_global_6k_v2.4_model_fp32-1/3/download",
+      description:
+          'The Gold Standard: 6,500+ species with high precision. (Kaggle Bundle)',
+      downloadUrl:
+          "https://www.kaggle.com/api/v1/models/shadiakiki1/birdnet-analyzer/tfLite/birdnet_global_6k_v2.4_model_fp32-1/3/download",
       labelsUrl: "", // Included in archive
       isArchive: true,
       sampleRate: 48000,
       inputSize: 144000,
     ),
     AcousticModel(
-      id: 'mammal_net_v1',
-      name: 'MammalNET v1.0',
-      description: 'Identifies 300+ terrestrial mammals including primates, canines, and felines.',
-      downloadUrl: "https://example.com/models/mammal_net_v1.tflite", // Placeholder URL
-      labelsUrl: "https://example.com/models/mammal_net_v1_labels.txt", // Placeholder URL
+      id: 'mammal_net_perch',
+      name: 'MammalNET v2.0 (Powered by Perch)',
+      description:
+          'High-performance bioacoustic classifier for mammals and other terrestrial species.',
+      downloadUrl:
+          "https://huggingface.co/MaHaWo/faunanet_test_models/resolve/main/google_perch_lite/model.tflite",
+      labelsUrl:
+          "https://huggingface.co/MaHaWo/faunanet_test_models/resolve/main/google_perch_lite/labels.txt",
       isArchive: false,
-      sampleRate: 16000,
-      inputSize: 15600,
-    ),
-    AcousticModel(
-      id: 'insect_net_v2',
-      name: 'EntoAcoustics (Insects) v2.0',
-      description: 'Specialized model for cicadas, crickets, katydids, and bees.',
-      downloadUrl: "https://example.com/models/insect_net_v2.tflite", // Placeholder URL
-      labelsUrl: "https://example.com/models/insect_net_v2_labels.txt", // Placeholder URL
-      isArchive: false,
-      sampleRate: 48000,
-      inputSize: 144000,
-    ),
-    AcousticModel(
-      id: 'amphibian_net',
-      name: 'AmphibiaNET',
-      description: 'Detects frogs and toads globally (400+ species).',
-      downloadUrl: "https://example.com/models/amphibian_net.tflite", // Placeholder URL
-      labelsUrl: "https://example.com/models/amphibian_net_labels.txt", // Placeholder URL
-      isArchive: false,
-      sampleRate: 16000,
-      inputSize: 15600,
-    ),
-    AcousticModel(
-      id: 'marine_net_v1',
-      name: 'MarineAcoustics v1.0',
-      description: 'Underwater hydrophone model: whales, dolphins, and snapping shrimp.',
-      downloadUrl: "https://example.com/models/marine_net_v1.tflite", // Placeholder URL
-      labelsUrl: "https://example.com/models/marine_net_v1_labels.txt", // Placeholder URL
-      isArchive: false,
-      sampleRate: 48000,
-      inputSize: 144000,
+      sampleRate: 32000,
+      inputSize: 160000,
     ),
   ];
 
@@ -93,9 +68,9 @@ class ModelDownloadService extends GetxService {
     final appDir = await getApplicationDocumentsDirectory();
     final modelFile = File('${appDir.path}/models/$id.tflite');
     final labelsFile = File('${appDir.path}/models/${id}_labels.txt');
-    
+
     if (!await modelFile.exists()) return false;
-    
+
     final modelSize = await modelFile.length();
     return modelSize > 1 * 1024 * 1024; // At least 1MB
   }
@@ -113,14 +88,14 @@ class ModelDownloadService extends GetxService {
       final modelDir = Directory('${appDir.path}/models');
       if (!await modelDir.exists()) await modelDir.create(recursive: true);
 
-      final dio = Dio(BaseOptions(
-        followRedirects: true,
-        maxRedirects: 15,
-        connectTimeout: const Duration(seconds: 60),
-        headers: {
-          'User-Agent': 'SoundScape-Mobile/1.0',
-        },
-      ));
+      final dio = Dio(
+        BaseOptions(
+          followRedirects: true,
+          maxRedirects: 15,
+          connectTimeout: const Duration(seconds: 60),
+          headers: {'User-Agent': 'SoundScape-Mobile/1.0'},
+        ),
+      );
 
       if (model.isArchive) {
         await _downloadAndExtract(dio, model, modelDir);
@@ -131,48 +106,64 @@ class ModelDownloadService extends GetxService {
       statusMessage.value = "Download complete!";
       _storage.activeModelId = model.id;
       _storage.useAdvancedModel = true;
-      
-      _showSafeSnackbar("Intelligence Upgraded", "${model.name} is now active.");
 
+      _showSafeSnackbar(
+        "Intelligence Upgraded",
+        "${model.name} is now active.",
+      );
     } catch (e) {
       statusMessage.value = "Download failed.";
       print("ModelDownload Error: $e");
-      _showSafeSnackbar("Download Error", "Could not retrieve the model package. Status: $e");
+      _showSafeSnackbar(
+        "Download Error",
+        "Could not retrieve the model package. Status: $e",
+      );
     } finally {
       isDownloading.value = false;
       downloadingModelId.value = '';
     }
   }
 
-  Future<void> _downloadDirect(Dio dio, AcousticModel model, Directory dir) async {
+  Future<void> _downloadDirect(
+    Dio dio,
+    AcousticModel model,
+    Directory dir,
+  ) async {
     final modelPath = '${dir.path}/${model.id}.tflite';
     final labelsPath = '${dir.path}/${model.id}_labels.txt';
 
     statusMessage.value = "Downloading Model Engine...";
-    
+
     // Explicitly configure redirection for the binary download
     await dio.download(
-      model.downloadUrl, 
-      modelPath, 
+      model.downloadUrl,
+      modelPath,
       options: Options(
         followRedirects: true,
         maxRedirects: 10,
         validateStatus: (status) => status != null && status < 400,
       ),
       onReceiveProgress: (c, t) {
-        if (t > 0) downloadProgress.value = (c / t) * 0.9; // Model is 90% of task
-      }
+        if (t > 0)
+          downloadProgress.value = (c / t) * 0.9; // Model is 90% of task
+      },
     );
+
+    // If it's a .pth or other format, we still save it as .tflite for the interpreter to try (or fail gracefully)
+    if (!modelPath.endsWith('.tflite') && File(modelPath).existsSync()) {
+      // This is a bit of a hack for non-tflite models provided by user
+      print("ModelDownload: Saved non-tflite file to $modelPath");
+    }
 
     if (model.labelsUrl.isNotEmpty) {
       statusMessage.value = "Downloading Class Mapping...";
       await dio.download(
-        model.labelsUrl, 
+        model.labelsUrl,
         labelsPath,
         options: Options(
           followRedirects: true,
           validateStatus: (status) => status != null && status < 400,
-        )
+        ),
       );
     } else {
       // Create a default label file if none provided
@@ -180,26 +171,50 @@ class ModelDownloadService extends GetxService {
     }
   }
 
-  Future<void> _downloadAndExtract(Dio dio, AcousticModel model, Directory dir) async {
+  Future<void> _downloadAndExtract(
+    Dio dio,
+    AcousticModel model,
+    Directory dir,
+  ) async {
     final tempPath = '${dir.path}/${model.id}_bundle.tar.gz';
-    
+
     statusMessage.value = "Downloading package...";
-    await dio.download(model.downloadUrl, tempPath, onReceiveProgress: (c, t) {
-      if (t > 0) downloadProgress.value = (c / t);
-    });
+    await dio.download(
+      model.downloadUrl,
+      tempPath,
+      onReceiveProgress: (c, t) {
+        if (t > 0) downloadProgress.value = (c / t);
+      },
+    );
 
     statusMessage.value = "Extracting...";
     final bytes = File(tempPath).readAsBytesSync();
-    final gzipBytes = GZipDecoder().decodeBytes(bytes);
-    final archive = TarDecoder().decodeBytes(gzipBytes);
 
+    // Check if it's actually GZipped (check magic numbers)
+    // GZip magic: 0x1F, 0x8B
+    List<int> tarBytes;
+    if (bytes.length >= 2 && bytes[0] == 0x1F && bytes[1] == 0x8B) {
+      tarBytes = GZipDecoder().decodeBytes(bytes);
+    } else {
+      tarBytes = bytes;
+    }
+
+    final archive = TarDecoder().decodeBytes(tarBytes);
+
+    bool foundTflite = false;
     for (final file in archive) {
       if (file.isFile) {
         final data = file.content as List<int>;
         if (file.name.toLowerCase().endsWith('.tflite')) {
           File('${dir.path}/${model.id}.tflite').writeAsBytesSync(data);
+          foundTflite = true;
         } else if (file.name.toLowerCase().contains('label')) {
           File('${dir.path}/${model.id}_labels.txt').writeAsBytesSync(data);
+        } else if ((file.name.toLowerCase().endsWith('.npy') ||
+                file.name.toLowerCase().endsWith('.pth')) &&
+            !foundTflite) {
+          // Fallback for non-tflite research files
+          File('${dir.path}/${model.id}.tflite').writeAsBytesSync(data);
         }
       }
     }
@@ -224,10 +239,10 @@ class ModelDownloadService extends GetxService {
     final appDir = await getApplicationDocumentsDirectory();
     final modelFile = File('${appDir.path}/models/$id.tflite');
     final labelsFile = File('${appDir.path}/models/${id}_labels.txt');
-    
+
     if (await modelFile.exists()) await modelFile.delete();
     if (await labelsFile.exists()) await labelsFile.delete();
-    
+
     if (_storage.activeModelId == id) {
       _storage.useAdvancedModel = false;
       _storage.activeModelId = 'yamnet';
